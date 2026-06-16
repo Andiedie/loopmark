@@ -1,0 +1,73 @@
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+
+function readFixture(path: string): string {
+  return readFileSync(new URL(path, import.meta.url), "utf8");
+}
+
+function frontmatter(markdown: string): Record<string, string> {
+  const match = markdown.match(/^---\n([\s\S]*?)\n---/);
+  if (!match) {
+    throw new Error("Missing YAML frontmatter.");
+  }
+
+  return Object.fromEntries(
+    match[1]
+      .split("\n")
+      .map((line) => line.match(/^([a-z_]+):\s*(.*)$/))
+      .filter((entry): entry is RegExpMatchArray => Boolean(entry))
+      .map((entry) => [entry[1], entry[2]])
+  );
+}
+
+describe("bundled Loopmark skill", () => {
+  it("uses standard skill metadata and links its protocol reference", () => {
+    const skill = readFixture("../skills/loopmark/SKILL.md");
+    const metadata = frontmatter(skill);
+
+    expect(metadata.name).toBe("loopmark");
+    expect(metadata.description).toContain("Loopmark CLI");
+    expect(metadata.description.length).toBeLessThanOrEqual(1024);
+    expect(skill).not.toContain("[TODO");
+    expect(skill).toContain("references/protocol.md");
+  });
+
+  it("keeps a strict human-input boundary and opens the browser by default", () => {
+    const skill = readFixture("../skills/loopmark/SKILL.md");
+
+    expect(skill).toContain("Do not ask the human for information you can reasonably discover");
+    expect(skill).toContain("real human decision");
+    expect(skill).toContain("npx @andie/loopmark < /path/to/questions.json");
+    expect(skill).toContain("pnpx @andie/loopmark < /path/to/questions.json");
+    expect(skill).not.toContain("--no-open");
+  });
+
+  it("documents Vercel skills add as the agent skill install path", () => {
+    const readme = readFixture("../README.md");
+
+    expect(readme).toContain("npx skills add andiedie/loopmark");
+    expect(readme).toContain("You do not need to install Loopmark globally");
+    expect(readme).not.toContain("skills experimental_sync");
+    expect(readme).not.toContain("pnpm add -D @andie/loopmark");
+    expect(readme).not.toContain("npm install -g @andie/loopmark");
+    expect(readme).not.toContain("--agent codex");
+  });
+
+  it("keeps README focused on human users instead of development workflow", () => {
+    const readme = readFixture("../README.md");
+
+    expect(readme).toContain("How It Works");
+    expect(readme).toContain("Privacy And Secrets");
+    expect(readme).not.toContain("## Development");
+    expect(readme).not.toContain("## Test");
+    expect(readme).not.toContain("## Release");
+    expect(readme).not.toContain("pnpm install");
+    expect(readme).not.toContain("pnpm build");
+  });
+
+  it("publishes the skill directory with the npm package", () => {
+    const packageJson = JSON.parse(readFixture("../package.json")) as { files?: string[] };
+
+    expect(packageJson.files).toContain("skills");
+  });
+});
