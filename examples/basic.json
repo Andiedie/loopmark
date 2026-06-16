@@ -1,0 +1,31 @@
+{
+  "title": "InterroGate quick check",
+  "description": "A short no-group session for agent preferences.",
+  "fields": [
+    {
+      "id": "package_name",
+      "label": "What package name should the agent use?",
+      "type": "text",
+      "required": true,
+      "default": "interrogate"
+    },
+    {
+      "id": "style",
+      "label": "Which implementation style should the agent prefer?",
+      "type": "choice",
+      "mode": "single",
+      "required": true,
+      "default": "Simple first",
+      "options": [
+        {
+          "label": "Simple first",
+          "description": "Keep the first version small, readable, and robust."
+        },
+        {
+          "label": "Complete architecture",
+          "description": "Invest more in future extension points."
+        }
+      ]
+    }
+  ]
+}

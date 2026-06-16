@@ -1,0 +1,25 @@
+{
+  "title": "Quick agent check-in",
+  "description": "A tiny ungrouped session for trying the full CLI loop.",
+  "fields": [
+    {
+      "id": "decision",
+      "label": "What should the agent do next?",
+      "type": "text",
+      "required": true,
+      "default": "Polish the UI before adding new protocol features."
+    },
+    {
+      "id": "confidence",
+      "label": "How confident are you in this direction?",
+      "type": "choice",
+      "required": true,
+      "default": "Mostly confident",
+      "options": [
+        "Mostly confident",
+        "Need another pass",
+        "Ask a follow-up first"
+      ]
+    }
+  ]
+}

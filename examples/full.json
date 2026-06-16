@@ -1,0 +1,150 @@
+{
+  "title": "Agent handoff review",
+  "description": "A comprehensive local review session covering text, choices, ranking, editable answers, custom options, defaults, and secrets.",
+  "groups": [
+    {
+      "id": "context",
+      "title": "Context",
+      "description": "Help the agent understand the product and current decision.",
+      "fields": [
+        {
+          "id": "project_summary",
+          "label": "What is the current project context?",
+          "type": "text",
+          "format": "markdown",
+          "multiline": true,
+          "required": true,
+          "default": "InterroGate is a local human-input gate for AI Agents. The next pass should prioritize product-quality UI and clear output."
+        },
+        {
+          "id": "implementation_note",
+          "label": "Any precise implementation note for the agent?",
+          "type": "text",
+          "format": "code",
+          "multiline": true,
+          "required": false,
+          "default": "stdout: final answers only\nstderr: URL, logs, validation errors"
+        }
+      ]
+    },
+    {
+      "id": "preferences",
+      "title": "Preferences",
+      "description": "Capture product and design preferences as dense feedback.",
+      "fields": [
+        {
+          "id": "visual_direction",
+          "label": "Which visual direction should the UI follow?",
+          "type": "choice",
+          "mode": "single",
+          "required": true,
+          "default": {
+            "label": "Paper Trail",
+            "description": "Elegant document-like layout with quiet controls and strong typography."
+          },
+          "options": [
+            {
+              "value": "paper",
+              "label": "Paper Trail",
+              "description": "Elegant document-like layout with quiet controls and strong typography."
+            },
+            {
+              "value": "tool",
+              "label": "Compact Tool",
+              "description": "Dense utility interface with less editorial spacing."
+            },
+            {
+              "value": "plain",
+              "label": "Plain Form",
+              "description": "Simple native-feeling form with minimal styling."
+            }
+          ]
+        },
+        {
+          "id": "must_haves",
+          "label": "Which capabilities are required for this iteration?",
+          "type": "choice",
+          "mode": "multiple",
+          "required": true,
+          "default": [
+            "Readable validation errors",
+            "Secret file output",
+            {
+              "label": "Browser-level visual QA",
+              "description": "Use screenshots to catch layout and typography issues."
+            }
+          ],
+          "options": [
+            {
+              "label": "Readable validation errors",
+              "description": "Show path, cause, fix, and example when input JSON is invalid."
+            },
+            {
+              "label": "Secret file output",
+              "description": "Write sensitive values to a local temporary file instead of stdout."
+            },
+            {
+              "label": "Ranking edits",
+              "description": "Let users reorder, edit, and add ranked feedback items."
+            },
+            {
+              "label": "Browser-level visual QA",
+              "description": "Use screenshots to catch layout and typography issues."
+            },
+            {
+              "label": "Cross-platform browser opening",
+              "description": "Support macOS, Windows, and Linux local browser launch behavior."
+            }
+          ]
+        },
+        {
+          "id": "priorities",
+          "label": "Rank the next implementation priorities.",
+          "type": "choice",
+          "mode": "ranking",
+          "required": true,
+          "options": [
+            {
+              "value": "visual",
+              "label": "Visual fidelity",
+              "description": "Match the accepted Paper Trail concept more closely."
+            },
+            {
+              "value": "protocol",
+              "label": "Protocol clarity",
+              "description": "Keep JSON compact and errors agent-readable."
+            },
+            {
+              "value": "coverage",
+              "label": "Meaningful test coverage",
+              "description": "Protect schema, output, server lifecycle, and UI flows."
+            },
+            "Packaging"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sensitive",
+      "title": "Sensitive Information",
+      "description": "Verify secret handling without leaking values into stdout.",
+      "fields": [
+        {
+          "id": "local_api_key",
+          "label": "Optional local API key or token",
+          "type": "text",
+          "secret": true,
+          "required": false
+        },
+        {
+          "id": "private_note",
+          "label": "Private note for the agent",
+          "type": "text",
+          "secret": true,
+          "multiline": true,
+          "required": false
+        }
+      ]
+    }
+  ]
+}
