@@ -11,13 +11,13 @@ The CLI reads a JSON question session from stdin, starts a temporary local web p
 ## Install
 
 ```bash
-npm install -g loopmark
+npm install -g @andie/loopmark
 ```
 
 Run once without installing globally:
 
 ```bash
-cat questions.json | npx --yes loopmark
+cat questions.json | npx --yes @andie/loopmark
 ```
 
 ## Development
