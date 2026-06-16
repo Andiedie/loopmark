@@ -8,6 +8,18 @@ cat examples/basic.json | loopmark
 
 The CLI reads a JSON question session from stdin, starts a temporary local web page, waits for human input, and writes the final JSON answers to stdout. Logs, URLs, and validation errors go to stderr.
 
+## Install
+
+```bash
+npm install -g loopmark
+```
+
+Run once without installing globally:
+
+```bash
+cat questions.json | npx --yes loopmark
+```
+
 ## Development
 
 ```bash

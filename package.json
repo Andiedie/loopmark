@@ -2,9 +2,26 @@
   "name": "loopmark",
   "version": "0.1.0",
   "description": "Local human input gate for AI agents.",
+  "keywords": [
+    "ai",
+    "agent",
+    "human-in-the-loop",
+    "cli",
+    "local-first",
+    "feedback"
+  ],
+  "homepage": "https://github.com/Andiedie/loopmark#readme",
+  "bugs": {
+    "url": "https://github.com/Andiedie/loopmark/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Andiedie/loopmark.git"
+  },
+  "license": "MIT",
   "type": "module",
   "bin": {
-    "loopmark": "./dist/cli/index.js"
+    "loopmark": "dist/cli/index.js"
   },
   "files": [
     "dist",
