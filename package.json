@@ -1,6 +1,6 @@
 {
   "name": "@andie/loopmark",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Local human input gate for AI agents.",
   "keywords": [
     "ai",
