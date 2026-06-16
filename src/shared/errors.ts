@@ -14,12 +14,12 @@ export type InvalidInputReport = {
   errors: AgentValidationError[];
 };
 
-export class InterrogateInputError extends Error {
+export class LoopmarkInputError extends Error {
   readonly report: InvalidInputReport;
 
   constructor(errors: AgentValidationError[]) {
-    super("Invalid InterroGate input.");
-    this.name = "InterrogateInputError";
+    super("Invalid Loopmark input.");
+    this.name = "LoopmarkInputError";
     this.report = { status: "invalid_input", errors };
   }
 }
@@ -53,7 +53,7 @@ export function zodIssueToAgentError(issue: ZodIssue): AgentValidationError {
       path,
       code: "unknown_key",
       message: `Unknown key: ${issue.keys.join(", ")}.`,
-      why: "InterroGate keeps the input schema small so agents spend fewer tokens and avoid ambiguous form behavior.",
+      why: "Loopmark keeps the input schema small so agents spend fewer tokens and avoid ambiguous form behavior.",
       fix: "Remove the unknown key, or rename it to one of the supported keys for this object.",
       example: {
         title: "Need your input",
@@ -67,7 +67,7 @@ export function zodIssueToAgentError(issue: ZodIssue): AgentValidationError {
       path,
       code: "invalid_value",
       message: issue.message,
-      why: "This value is outside the supported InterroGate vocabulary.",
+      why: "This value is outside the supported Loopmark vocabulary.",
       fix: "Use one of the supported literal values shown in the error message.",
       example: "text"
     };
@@ -78,7 +78,7 @@ export function zodIssueToAgentError(issue: ZodIssue): AgentValidationError {
       path,
       code: "invalid_type",
       message: issue.message,
-      why: "The JSON shape does not match what InterroGate can render or return to the agent.",
+      why: "The JSON shape does not match what Loopmark can render or return to the agent.",
       fix: "Change the value to the expected JSON type.",
       example: path.endsWith("fields") ? [] : "A short answer"
     };
@@ -88,7 +88,7 @@ export function zodIssueToAgentError(issue: ZodIssue): AgentValidationError {
     path,
     code: issue.code,
     message: issue.message,
-    why: "The input JSON did not pass InterroGate schema validation.",
+    why: "The input JSON did not pass Loopmark schema validation.",
     fix: "Adjust the value at this path to match the documented schema.",
     example: {
       id: "question_id",

@@ -3,13 +3,13 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { test, expect, type Page } from "@playwright/test";
 import { normalizeSession } from "../src/shared/schema";
-import { startInterrogateServer, type RunningInterrogateServer } from "../src/server/http";
+import { startLoopmarkServer, type RunningLoopmarkServer } from "../src/server/http";
 
-let running: RunningInterrogateServer | undefined;
+let running: RunningLoopmarkServer | undefined;
 let secretRoot: string;
 
 test.beforeEach(async () => {
-  secretRoot = await mkdtemp(join(tmpdir(), "interrogate-e2e-"));
+  secretRoot = await mkdtemp(join(tmpdir(), "loopmark-e2e-"));
 });
 
 test.afterEach(async () => {
@@ -22,7 +22,7 @@ test.afterEach(async () => {
 
 async function openSession(page: Page, input: unknown) {
   const session = normalizeSession(input);
-  running = await startInterrogateServer(session, {
+  running = await startLoopmarkServer(session, {
     webRoot: resolve("dist/web"),
     secretRoot
   });
@@ -59,7 +59,7 @@ test("submits a simple ungrouped session with text, custom single choice, and em
       }
     ]
   });
-  running = await startInterrogateServer(session, {
+  running = await startLoopmarkServer(session, {
     webRoot: resolve("dist/web"),
     secretRoot
   });
@@ -103,7 +103,7 @@ test("rejects invalid tokens and duplicate submissions", async ({ request }) => 
     title: "Token lifecycle check",
     fields: [{ id: "summary", type: "text", label: "Summary", required: true }]
   });
-  running = await startInterrogateServer(session, {
+  running = await startLoopmarkServer(session, {
     webRoot: resolve("dist/web"),
     secretRoot
   });
@@ -144,7 +144,7 @@ test("submits a complex grouped session with custom choices, ranking edits, and 
   page
 }) => {
   const session = normalizeSession({
-    title: "InterroGate implementation questions",
+    title: "Loopmark implementation questions",
     description: "A local input gate for AI Agents.",
     groups: [
       {
@@ -200,7 +200,7 @@ test("submits a complex grouped session with custom choices, ranking edits, and 
     ]
   });
 
-  running = await startInterrogateServer(session, {
+  running = await startLoopmarkServer(session, {
     webRoot: resolve("dist/web"),
     secretRoot
   });
@@ -214,7 +214,7 @@ test("submits a complex grouped session with custom choices, ranking edits, and 
   });
 
   await page.goto(running.url);
-  await expect(page.getByRole("heading", { name: "InterroGate implementation questions" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Loopmark implementation questions" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Paper Trail", exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Paper Trail", exact: true }).click();
@@ -277,7 +277,7 @@ test("renders without layout overflow on a mobile viewport", async ({ page }) =>
       { id: "choice", type: "choice", label: "Pick a direction", options: ["Simple", "Detailed"] }
     ]
   });
-  running = await startInterrogateServer(session, {
+  running = await startLoopmarkServer(session, {
     webRoot: resolve("dist/web"),
     secretRoot
   });
@@ -612,7 +612,7 @@ test("shows choice details without editing and hides unavailable remove actions"
       }
     ]
   });
-  running = await startInterrogateServer(session, {
+  running = await startLoopmarkServer(session, {
     webRoot: resolve("dist/web"),
     secretRoot
   });
@@ -660,7 +660,7 @@ test("keeps custom choices and edited details available after switching selectio
       }
     ]
   });
-  running = await startInterrogateServer(session, {
+  running = await startLoopmarkServer(session, {
     webRoot: resolve("dist/web"),
     secretRoot
   });
@@ -690,7 +690,7 @@ test("resets changed answers only after confirmation", async ({ page }) => {
     title: "Reset behavior",
     fields: [{ id: "summary", type: "text", label: "Summary", required: true, default: "Initial summary" }]
   });
-  running = await startInterrogateServer(session, {
+  running = await startLoopmarkServer(session, {
     webRoot: resolve("dist/web"),
     secretRoot
   });
@@ -725,7 +725,7 @@ test("hides the agent default hint after a text default is edited", async ({ pag
       }
     ]
   });
-  running = await startInterrogateServer(session, {
+  running = await startLoopmarkServer(session, {
     webRoot: resolve("dist/web"),
     secretRoot
   });
@@ -770,7 +770,7 @@ test("expands a collapsed group when validation fails inside it", async ({ page 
       }
     ]
   });
-  running = await startInterrogateServer(session, {
+  running = await startLoopmarkServer(session, {
     webRoot: resolve("dist/web"),
     secretRoot
   });

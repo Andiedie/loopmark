@@ -1,6 +1,6 @@
-# InterroGate Design
+# Loopmark Design
 
-InterroGate is a local human-input gate for AI Agents. It reads a compact JSON question session, opens a temporary local page, and returns dense human feedback to the calling agent. The interface is not a form builder, dashboard, survey SaaS, or approval system. It is a quiet, well-set document where a human can review, edit, rank, and submit answers with confidence.
+Loopmark is a local human-input gate for AI Agents. It reads a compact JSON question session, opens a temporary local page, and returns dense human feedback to the calling agent. The interface is not a form builder, dashboard, survey SaaS, or approval system. It is a quiet, well-set document where a human can review, edit, rank, and submit answers with confidence.
 
 ## 1. Design Goal
 

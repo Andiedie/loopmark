@@ -9,13 +9,13 @@ import { buildFinalOutput, type FinalOutput } from "../shared/answers";
 import { validateSubmitPayload } from "../shared/submission";
 import type { NormalizedSession } from "../shared/schema";
 
-export type InterrogateServerOptions = {
+export type LoopmarkServerOptions = {
   webRoot?: string;
   secretRoot?: string;
   host?: string;
 };
 
-export type RunningInterrogateServer = {
+export type RunningLoopmarkServer = {
   url: string;
   token: string;
   port: number;
@@ -51,14 +51,14 @@ type JsonBodyReadResult =
       message: string;
     };
 
-export async function startInterrogateServer(
+export async function startLoopmarkServer(
   session: NormalizedSession,
-  options: InterrogateServerOptions = {}
-): Promise<RunningInterrogateServer> {
+  options: LoopmarkServerOptions = {}
+): Promise<RunningLoopmarkServer> {
   const token = randomUUID();
   const host = options.host ?? "127.0.0.1";
   const webRoot = options.webRoot ?? defaultWebRoot();
-  const secretRoot = options.secretRoot ?? join(tmpdir(), `interrogate-${token}`);
+  const secretRoot = options.secretRoot ?? join(tmpdir(), `loopmark-${token}`);
   let submissionState: SubmissionState = "open";
   let resolveResult: (output: FinalOutput) => void;
   let rejectResult: (error: Error) => void;
@@ -101,7 +101,7 @@ export async function startInterrogateServer(
   await listen(server, host);
   const address = server.address();
   if (typeof address !== "object" || address === null) {
-    throw new Error("Unable to determine InterroGate server port.");
+    throw new Error("Unable to determine Loopmark server port.");
   }
 
   const url = `http://${host}:${address.port}/s/${token}`;
@@ -174,7 +174,7 @@ async function handleRequest(input: {
     }
 
     if (!canSubmit()) {
-      return writeJson(response, 409, { error: "This InterroGate session has already been submitted." });
+      return writeJson(response, 409, { error: "This Loopmark session has already been submitted." });
     }
 
     const body = await readJsonBody(request);
@@ -188,7 +188,7 @@ async function handleRequest(input: {
     }
 
     if (!claimSubmit()) {
-      return writeJson(response, 409, { error: "This InterroGate session has already been submitted." });
+      return writeJson(response, 409, { error: "This Loopmark session has already been submitted." });
     }
 
     await mkdir(secretRoot, { recursive: true, mode: 0o700 });

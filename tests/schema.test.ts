@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getInitialAnswer } from "../src/shared/answer-state";
-import { InterrogateInputError } from "../src/shared/errors";
+import { LoopmarkInputError } from "../src/shared/errors";
 import { normalizeSession, parseInputJson } from "../src/shared/schema";
 import { validateSubmitPayload } from "../src/shared/submission";
 
@@ -124,8 +124,8 @@ describe("input schema normalization", () => {
         ]
       });
     } catch (error) {
-      expect(error).toBeInstanceOf(InterrogateInputError);
-      expect((error as InterrogateInputError).report.errors[0]).toMatchObject({
+      expect(error).toBeInstanceOf(LoopmarkInputError);
+      expect((error as LoopmarkInputError).report.errors[0]).toMatchObject({
         path: "fields[0].default",
         code: "unknown_default_option"
       });
@@ -150,8 +150,8 @@ describe("input schema normalization", () => {
         ]
       });
     } catch (error) {
-      expect(error).toBeInstanceOf(InterrogateInputError);
-      expect((error as InterrogateInputError).report.errors[0]).toMatchObject({
+      expect(error).toBeInstanceOf(LoopmarkInputError);
+      expect((error as LoopmarkInputError).report.errors[0]).toMatchObject({
         path: "fields[0].default[1]",
         code: "duplicate_default_option"
       });
@@ -175,8 +175,8 @@ describe("input schema normalization", () => {
         ]
       });
     } catch (error) {
-      expect(error).toBeInstanceOf(InterrogateInputError);
-      expect((error as InterrogateInputError).report.errors[0]).toMatchObject({
+      expect(error).toBeInstanceOf(LoopmarkInputError);
+      expect((error as LoopmarkInputError).report.errors[0]).toMatchObject({
         path: "fields[0].default",
         code: "invalid_default_item"
       });
@@ -197,8 +197,8 @@ describe("input schema normalization", () => {
         ]
       });
     } catch (error) {
-      expect(error).toBeInstanceOf(InterrogateInputError);
-      expect((error as InterrogateInputError).report.errors[0]).toMatchObject({
+      expect(error).toBeInstanceOf(LoopmarkInputError);
+      expect((error as LoopmarkInputError).report.errors[0]).toMatchObject({
         path: "fields[0].default[0]",
         code: "invalid_default_item"
       });
@@ -227,13 +227,13 @@ describe("input schema normalization", () => {
   });
 
   it("returns an agent-readable JSON parse error", () => {
-    expect(() => parseInputJson("{nope")).toThrow(InterrogateInputError);
+    expect(() => parseInputJson("{nope")).toThrow(LoopmarkInputError);
 
     try {
       parseInputJson("{nope");
     } catch (error) {
-      expect(error).toBeInstanceOf(InterrogateInputError);
-      expect((error as InterrogateInputError).report.errors[0]).toMatchObject({
+      expect(error).toBeInstanceOf(LoopmarkInputError);
+      expect((error as LoopmarkInputError).report.errors[0]).toMatchObject({
         path: "$",
         code: "invalid_json"
       });
@@ -246,7 +246,7 @@ describe("input schema normalization", () => {
         title: "Need input",
         fields: [{ id: "timeout", type: "number", label: "Timeout" }]
       })
-    ).toThrow(InterrogateInputError);
+    ).toThrow(LoopmarkInputError);
 
     try {
       normalizeSession({
@@ -254,7 +254,7 @@ describe("input schema normalization", () => {
         fields: [{ id: "timeout", type: "number", label: "Timeout" }]
       });
     } catch (error) {
-      const report = (error as InterrogateInputError).report;
+      const report = (error as LoopmarkInputError).report;
       expect(JSON.stringify(report)).toContain("path");
       expect(JSON.stringify(report)).toContain("fix");
     }
@@ -269,7 +269,7 @@ describe("input schema normalization", () => {
           { title: "B", fields: [{ id: "same", label: "Two" }] }
         ]
       })
-    ).toThrow(InterrogateInputError);
+    ).toThrow(LoopmarkInputError);
   });
 
   it("rejects duplicate group ids because UI anchors and collapsed state use them", () => {
@@ -284,8 +284,8 @@ describe("input schema normalization", () => {
         ]
       });
     } catch (error) {
-      expect(error).toBeInstanceOf(InterrogateInputError);
-      expect((error as InterrogateInputError).report.errors[0]).toMatchObject({
+      expect(error).toBeInstanceOf(LoopmarkInputError);
+      expect((error as LoopmarkInputError).report.errors[0]).toMatchObject({
         path: "groups[1].id",
         code: "duplicate_group_id"
       });
@@ -301,7 +301,7 @@ describe("input schema normalization", () => {
         fields: [{ id: "text", label: "Text", type: "text", default: 1 }]
       });
     } catch (error) {
-      expect((error as InterrogateInputError).report.errors[0]).toMatchObject({
+      expect((error as LoopmarkInputError).report.errors[0]).toMatchObject({
         path: "fields[0].default",
         code: "invalid_text_default"
       });
@@ -314,7 +314,7 @@ describe("input schema normalization", () => {
         title: "Need input",
         fields: [{ id: "secret", type: "text", secret: true, label: "Secret", default: "abc" }]
       })
-    ).toThrow(InterrogateInputError);
+    ).toThrow(LoopmarkInputError);
 
     expect(() =>
       normalizeSession({
@@ -331,7 +331,7 @@ describe("input schema normalization", () => {
           }
         ]
       })
-    ).toThrow(InterrogateInputError);
+    ).toThrow(LoopmarkInputError);
   });
 
   it("rejects duplicate choice option labels because answers use labels", () => {
@@ -353,8 +353,8 @@ describe("input schema normalization", () => {
         ]
       });
     } catch (error) {
-      expect(error).toBeInstanceOf(InterrogateInputError);
-      expect((error as InterrogateInputError).report.errors[0]).toMatchObject({
+      expect(error).toBeInstanceOf(LoopmarkInputError);
+      expect((error as LoopmarkInputError).report.errors[0]).toMatchObject({
         path: "fields[0].options[1].label",
         code: "duplicate_option_label"
       });
@@ -362,20 +362,20 @@ describe("input schema normalization", () => {
   });
 
   it("rejects ambiguous session shapes and text fields with choice keys", () => {
-    expect(() => normalizeSession({ title: "Need input" })).toThrow(InterrogateInputError);
+    expect(() => normalizeSession({ title: "Need input" })).toThrow(LoopmarkInputError);
     expect(() =>
       normalizeSession({
         title: "Need input",
         fields: [{ id: "a", label: "A" }],
         groups: [{ title: "G", fields: [{ id: "b", label: "B" }] }]
       })
-    ).toThrow(InterrogateInputError);
+    ).toThrow(LoopmarkInputError);
     expect(() =>
       normalizeSession({
         title: "Need input",
         fields: [{ id: "text", label: "Text", type: "text", options: ["A"] }]
       })
-    ).toThrow(InterrogateInputError);
+    ).toThrow(LoopmarkInputError);
   });
 
   it("rejects invalid defaults with targeted fixes", () => {
@@ -384,7 +384,7 @@ describe("input schema normalization", () => {
         title: "Need input",
         fields: [{ id: "text", label: "Text", type: "text", default: 1 }]
       })
-    ).toThrow(InterrogateInputError);
+    ).toThrow(LoopmarkInputError);
     expect(() =>
       normalizeSession({
         title: "Need input",
@@ -392,7 +392,7 @@ describe("input schema normalization", () => {
           { id: "single", label: "Single", type: "choice", options: ["A"], mode: "single", default: ["A"] }
         ]
       })
-    ).toThrow(InterrogateInputError);
+    ).toThrow(LoopmarkInputError);
     expect(() =>
       normalizeSession({
         title: "Need input",
@@ -400,7 +400,7 @@ describe("input schema normalization", () => {
           { id: "multiple", label: "Multiple", type: "choice", options: ["A"], mode: "multiple", default: "A" }
         ]
       })
-    ).toThrow(InterrogateInputError);
+    ).toThrow(LoopmarkInputError);
     expect(() =>
       normalizeSession({
         title: "Need input",
@@ -415,13 +415,13 @@ describe("input schema normalization", () => {
           }
         ]
       })
-    ).toThrow(InterrogateInputError);
+    ).toThrow(LoopmarkInputError);
     expect(() =>
       normalizeSession({
         title: "Need input",
         fields: [{ id: "choice", label: "Choice", type: "choice", options: ["A"], default: 1 }]
       })
-    ).toThrow(InterrogateInputError);
+    ).toThrow(LoopmarkInputError);
   });
 
   it("rejects choice fields without options", () => {
@@ -430,6 +430,6 @@ describe("input schema normalization", () => {
         title: "Need input",
         fields: [{ id: "choice", label: "Choice", type: "choice" }]
       })
-    ).toThrow(InterrogateInputError);
+    ).toThrow(LoopmarkInputError);
   });
 });

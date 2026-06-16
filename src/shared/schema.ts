@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {
-  InterrogateInputError,
+  LoopmarkInputError,
   makeError,
   zodIssueToAgentError,
   type AgentValidationError
@@ -136,13 +136,13 @@ export function parseInputJson(input: string): NormalizedSession {
   try {
     parsed = JSON.parse(input);
   } catch (error) {
-    throw new InterrogateInputError([
+    throw new LoopmarkInputError([
       makeError({
         path: "$",
         code: "invalid_json",
         message: error instanceof Error ? error.message : "Input is not valid JSON.",
-        why: "InterroGate reads stdin as JSON before it can render any questions.",
-        fix: "Pass a valid JSON object to stdin, for example: cat questions.json | interrogate.",
+        why: "Loopmark reads stdin as JSON before it can render any questions.",
+        fix: "Pass a valid JSON object to stdin, for example: cat questions.json | loopmark.",
         example: {
           title: "Need your input",
           fields: [{ id: "scope", label: "What should be in scope?", type: "text" }]
@@ -158,7 +158,7 @@ export function normalizeSession(input: unknown): NormalizedSession {
   const result = sessionSchema.safeParse(input);
 
   if (!result.success) {
-    throw new InterrogateInputError(result.error.issues.map(zodIssueToAgentError));
+    throw new LoopmarkInputError(result.error.issues.map(zodIssueToAgentError));
   }
 
   const errors: AgentValidationError[] = [];
@@ -171,7 +171,7 @@ export function normalizeSession(input: unknown): NormalizedSession {
   collectDuplicateFieldErrors(rawGroups, errors);
 
   if (errors.length > 0) {
-    throw new InterrogateInputError(errors);
+    throw new LoopmarkInputError(errors);
   }
 
   return {
@@ -283,7 +283,7 @@ function normalizeField(field: RawField, path: string, errors: AgentValidationEr
         path: `${path}.options`,
         code: "missing_choice_options",
         message: "Choice fields must include at least one option.",
-        why: "InterroGate needs initial options before the user can select, edit, rank, or add custom feedback.",
+        why: "Loopmark needs initial options before the user can select, edit, rank, or add custom feedback.",
         fix: "Add an options array. Use strings for the shortest input JSON.",
         example: ["Simple first", "Complete architecture", "Ask me again later"]
       })
@@ -516,7 +516,7 @@ function normalizeDefaultItem(
       path,
       code: "invalid_default_item",
       message: "Default item must be a string or an object with label and optional description.",
-      why: "InterroGate needs a readable recommendation that can become the user's answer.",
+      why: "Loopmark needs a readable recommendation that can become the user's answer.",
       fix: "Use a string for compact input, or { label, description } for richer feedback.",
       example: { label: "Paper Trail UI", description: "Keep the interface elegant and document-like." }
     })
@@ -567,7 +567,7 @@ function collectDuplicateGroupErrors(groups: RawGroupDescriptor[], errors: Agent
           code: "duplicate_group_id",
           message: `Duplicate group id: ${groupId}.`,
           why: "The UI uses group ids for document anchors, outline links, React keys, and collapsed-section state.",
-          fix: "Give each group a unique id, or omit ids and let InterroGate generate stable ids.",
+          fix: "Give each group a unique id, or omit ids and let Loopmark generate stable ids.",
           example: `${groupId}_${groupIndex + 1}`
         })
       );

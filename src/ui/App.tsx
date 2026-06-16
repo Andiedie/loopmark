@@ -132,11 +132,11 @@ export function App() {
   }, [answers, session]);
 
   if (loadError) {
-    return <MessageScreen title="Unable to load InterroGate" message={loadError} />;
+    return <MessageScreen title="Unable to load Loopmark" message={loadError} />;
   }
 
   if (!session) {
-    return <MessageScreen title="Loading InterroGate" message="Preparing the local input page." loading />;
+    return <MessageScreen title="Loading Loopmark" message="Preparing the local input page." loading />;
   }
 
   const percent = progress.required === 0 ? 100 : Math.round((progress.complete / progress.required) * 100);
@@ -226,7 +226,7 @@ export function App() {
     return (
       <MessageScreen
         title="Inputs submitted"
-        message="You can return to the agent. InterroGate has written the final JSON to stdout."
+        message="You can return to the agent. Loopmark has written the final JSON to stdout."
       />
     );
   }
@@ -236,7 +236,7 @@ export function App() {
       <header className="sticky top-0 z-20 border-b border-paper-line bg-paper-50">
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-5 py-4 md:flex-row md:items-center md:justify-between md:px-8 lg:px-10">
           <div className="flex min-w-0 flex-col gap-1 md:flex-row md:items-baseline md:gap-4">
-            <p className="font-serif text-2xl leading-tight md:text-3xl">InterroGate</p>
+            <p className="font-serif text-2xl leading-tight md:text-3xl">Loopmark</p>
             <h1 className="min-w-0 max-w-2xl truncate text-sm text-paper-muted md:text-base">{session.title}</h1>
           </div>
           <div className="w-full md:w-80">

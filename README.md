@@ -1,9 +1,9 @@
-# InterroGate
+# Loopmark
 
-InterroGate is a local Human Input gate for AI Agents.
+Loopmark is a local Human Input gate for AI Agents.
 
 ```bash
-cat examples/basic.json | interrogate
+cat examples/basic.json | loopmark
 ```
 
 The CLI reads a JSON question session from stdin, starts a temporary local web page, waits for human input, and writes the final JSON answers to stdout. Logs, URLs, and validation errors go to stderr.

@@ -1,5 +1,5 @@
 {
-  "title": "InterroGate quick check",
+  "title": "Loopmark quick check",
   "description": "A short no-group session for agent preferences.",
   "fields": [
     {
@@ -7,7 +7,7 @@
       "label": "What package name should the agent use?",
       "type": "text",
       "required": true,
-      "default": "interrogate"
+      "default": "loopmark"
     },
     {
       "id": "style",

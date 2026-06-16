@@ -39,7 +39,7 @@ const session: NormalizedSession = {
   ]
 };
 
-describe("InterroGate UI", () => {
+describe("Loopmark UI", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
@@ -420,7 +420,7 @@ describe("InterroGate UI", () => {
 
     render(<App />);
 
-    expect(await screen.findByText("Unable to load InterroGate")).toBeInTheDocument();
+    expect(await screen.findByText("Unable to load Loopmark")).toBeInTheDocument();
     expect(screen.getByText("Session request failed with 403.")).toBeInTheDocument();
   });
 
@@ -446,7 +446,7 @@ describe("InterroGate UI", () => {
     await user.click(screen.getByRole("button", { name: "Simple" }));
     await user.click(screen.getByRole("button", { name: /submit inputs/i }));
 
-    expect(await screen.findByText("Unable to load InterroGate")).toBeInTheDocument();
+    expect(await screen.findByText("Unable to load Loopmark")).toBeInTheDocument();
     expect(screen.getByText("submit failed after validation")).toBeInTheDocument();
   });
 

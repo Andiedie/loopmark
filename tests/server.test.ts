@@ -4,15 +4,15 @@ import { tmpdir } from "node:os";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { normalizeSession } from "../src/shared/schema";
-import { startInterrogateServer, type RunningInterrogateServer } from "../src/server/http";
+import { startLoopmarkServer, type RunningLoopmarkServer } from "../src/server/http";
 import { getBrowserCommand } from "../src/server/open-browser";
 
 let tempDir: string;
-let running: RunningInterrogateServer | undefined;
+let running: RunningLoopmarkServer | undefined;
 
 beforeEach(async () => {
-  tempDir = await mkdtemp(join(tmpdir(), "interrogate-server-test-"));
-  await writeFile(join(tempDir, "index.html"), "<div id=\"root\">InterroGate</div>");
+  tempDir = await mkdtemp(join(tmpdir(), "loopmark-server-test-"));
+  await writeFile(join(tempDir, "index.html"), "<div id=\"root\">Loopmark</div>");
   await mkdir(join(tempDir, "assets"));
   await writeFile(join(tempDir, "assets", "asset.js"), "console.log('asset');");
 });
@@ -32,7 +32,7 @@ describe("local HTTP server", () => {
       fields: [{ id: "scope", label: "Scope", type: "text", required: true }]
     });
 
-    running = await startInterrogateServer(session, { webRoot: tempDir, secretRoot: tempDir });
+    running = await startLoopmarkServer(session, { webRoot: tempDir, secretRoot: tempDir });
     const sessionResponse = await fetch(`http://127.0.0.1:${running.port}/api/session?token=${running.token}`);
     expect(sessionResponse.status).toBe(200);
     expect(await sessionResponse.json()).toMatchObject({ title: "Need input" });
@@ -63,7 +63,7 @@ describe("local HTTP server", () => {
       title: "Need input",
       fields: [{ id: "scope", label: "Scope", type: "text" }]
     });
-    running = await startInterrogateServer(session, { webRoot: tempDir, secretRoot: tempDir });
+    running = await startLoopmarkServer(session, { webRoot: tempDir, secretRoot: tempDir });
 
     const url = `http://127.0.0.1:${running.port}/api/submit?token=${running.token}`;
     const body = JSON.stringify({ answers: { scope: { type: "text", value: "First" } } });
@@ -76,7 +76,7 @@ describe("local HTTP server", () => {
       title: "Need input",
       fields: [{ id: "scope", label: "Scope", type: "text" }]
     });
-    running = await startInterrogateServer(session);
+    running = await startLoopmarkServer(session);
 
     const response = await fetch(`http://127.0.0.1:${running.port}/api/session?token=${running.token}`);
 
@@ -89,7 +89,7 @@ describe("local HTTP server", () => {
       title: "Need input",
       fields: [{ id: "scope", label: "Scope", type: "text", required: true }]
     });
-    running = await startInterrogateServer(session, { webRoot: tempDir, secretRoot: tempDir });
+    running = await startLoopmarkServer(session, { webRoot: tempDir, secretRoot: tempDir });
 
     const url = `http://127.0.0.1:${running.port}/api/submit?token=${running.token}`;
     const request = {
@@ -111,7 +111,7 @@ describe("local HTTP server", () => {
       title: "Need input",
       fields: [{ id: "scope", label: "Scope", type: "text" }]
     });
-    running = await startInterrogateServer(session, { webRoot: tempDir, secretRoot: tempDir });
+    running = await startLoopmarkServer(session, { webRoot: tempDir, secretRoot: tempDir });
 
     const response = await fetch(`http://127.0.0.1:${running.port}/api/submit?token=wrong-token`, {
       method: "POST",
@@ -131,7 +131,7 @@ describe("local HTTP server", () => {
       title: "Need input",
       fields: [{ id: "scope", label: "Scope", type: "text", required: true }]
     });
-    running = await startInterrogateServer(session, { webRoot: tempDir, secretRoot: tempDir });
+    running = await startLoopmarkServer(session, { webRoot: tempDir, secretRoot: tempDir });
 
     const response = await fetch(`http://127.0.0.1:${running.port}/api/submit?token=${running.token}`, {
       method: "POST",
@@ -167,7 +167,7 @@ describe("local HTTP server", () => {
         }
       ]
     });
-    running = await startInterrogateServer(session, { webRoot: tempDir, secretRoot: tempDir });
+    running = await startLoopmarkServer(session, { webRoot: tempDir, secretRoot: tempDir });
 
     const response = await fetch(`http://127.0.0.1:${running.port}/api/submit?token=${running.token}`, {
       method: "POST",
@@ -203,7 +203,7 @@ describe("local HTTP server", () => {
         }
       ]
     });
-    running = await startInterrogateServer(session, { webRoot: tempDir, secretRoot: tempDir });
+    running = await startLoopmarkServer(session, { webRoot: tempDir, secretRoot: tempDir });
 
     const response = await fetch(`http://127.0.0.1:${running.port}/api/submit?token=${running.token}`, {
       method: "POST",
@@ -230,7 +230,7 @@ describe("local HTTP server", () => {
       title: "Need input",
       fields: [{ id: "scope", label: "Scope", type: "text" }]
     });
-    running = await startInterrogateServer(session, { webRoot: tempDir, secretRoot: tempDir });
+    running = await startLoopmarkServer(session, { webRoot: tempDir, secretRoot: tempDir });
 
     expect((await fetch(running.url)).status).toBe(200);
     expect((await fetch(`http://127.0.0.1:${running.port}/assets/asset.js`)).headers.get("content-type")).toContain(
@@ -250,7 +250,7 @@ describe("local HTTP server", () => {
       title: "Need input",
       fields: [{ id: "scope", label: "Scope", type: "text" }]
     });
-    running = await startInterrogateServer(session, { webRoot: tempDir, secretRoot: tempDir });
+    running = await startLoopmarkServer(session, { webRoot: tempDir, secretRoot: tempDir });
 
     const response = await fetch(`http://127.0.0.1:${running.port}/api/submit?token=${running.token}`, {
       method: "POST",
@@ -276,7 +276,7 @@ describe("local HTTP server", () => {
       title: "Need input",
       fields: [{ id: "scope", label: "Scope", type: "text" }]
     });
-    running = await startInterrogateServer(session, { webRoot: tempDir, secretRoot: tempDir });
+    running = await startLoopmarkServer(session, { webRoot: tempDir, secretRoot: tempDir });
     const url = `http://127.0.0.1:${running.port}/api/submit?token=${running.token}`;
 
     for (const body of ["null", "false", "0", "\"\""]) {
@@ -315,7 +315,7 @@ describe("local HTTP server", () => {
       title: "Need input",
       fields: [{ id: "scope", label: "Scope", type: "text" }]
     });
-    running = await startInterrogateServer(session, { webRoot: tempDir, secretRoot: tempDir });
+    running = await startLoopmarkServer(session, { webRoot: tempDir, secretRoot: tempDir });
     const url = `http://127.0.0.1:${running.port}/api/submit?token=${running.token}`;
 
     const response = await fetch(url, {
@@ -342,7 +342,7 @@ describe("local HTTP server", () => {
     });
     const fileSecretRoot = join(tempDir, "not-a-directory");
     await writeFile(fileSecretRoot, "blocks mkdir");
-    running = await startInterrogateServer(session, { webRoot: tempDir, secretRoot: fileSecretRoot });
+    running = await startLoopmarkServer(session, { webRoot: tempDir, secretRoot: fileSecretRoot });
     const resultPromise = running.result.catch((error: unknown) => error);
 
     const response = await fetch(`http://127.0.0.1:${running.port}/api/submit?token=${running.token}`, {
@@ -361,7 +361,7 @@ describe("local HTTP server", () => {
       title: "Need input",
       fields: [{ id: "scope", label: "Scope", type: "text" }]
     });
-    running = await startInterrogateServer(session, { webRoot: tempDir, secretRoot: tempDir });
+    running = await startLoopmarkServer(session, { webRoot: tempDir, secretRoot: tempDir });
     const close = running.close;
 
     await close();

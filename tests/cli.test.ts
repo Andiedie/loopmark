@@ -8,8 +8,8 @@ function createRuntime(input: string, overrides: Partial<Pick<CliRuntime, "argv"
   let stdout = "";
   let stderr = "";
   const runtime: CliRuntime = {
-    argv: overrides.argv ?? ["node", "interrogate"],
-    env: overrides.env ?? { INTERROGATE_NO_OPEN: "1" },
+    argv: overrides.argv ?? ["node", "loopmark"],
+    env: overrides.env ?? { LOOPMARK_NO_OPEN: "1" },
     stdin: Readable.from([input]),
     stdout: {
       write: vi.fn((chunk: string | Uint8Array) => {
@@ -36,7 +36,7 @@ function createDependencies(output: FinalOutput = { status: "submitted", answers
   const close = vi.fn(async () => undefined);
   const dependencies: CliDependencies = {
     parseInputJson,
-    startInterrogateServer: vi.fn(async () => ({
+    startLoopmarkServer: vi.fn(async () => ({
       url: "http://127.0.0.1:12345/s/test-token",
       token: "test-token",
       port: 12345,
@@ -54,15 +54,15 @@ function createDependencies(output: FinalOutput = { status: "submitted", answers
 
 describe("CLI runner", () => {
   it("prints help without reading or starting a session", async () => {
-    const { runtime, stdout, stderr } = createRuntime("", { argv: ["node", "interrogate", "--help"] });
+    const { runtime, stdout, stderr } = createRuntime("", { argv: ["node", "loopmark", "--help"] });
     const { dependencies } = createDependencies();
 
     const code = await runCli(runtime, dependencies);
 
     expect(code).toBe(0);
-    expect(stdout()).toContain("Usage: cat questions.json | interrogate");
+    expect(stdout()).toContain("Usage: cat questions.json | loopmark");
     expect(stderr()).toBe("");
-    expect(dependencies.startInterrogateServer).not.toHaveBeenCalled();
+    expect(dependencies.startLoopmarkServer).not.toHaveBeenCalled();
   });
 
   it("prints agent-readable validation errors to stderr only", async () => {
@@ -77,7 +77,7 @@ describe("CLI runner", () => {
       status: "invalid_input",
       errors: [{ path: "$", code: "invalid_json" }]
     });
-    expect(dependencies.startInterrogateServer).not.toHaveBeenCalled();
+    expect(dependencies.startLoopmarkServer).not.toHaveBeenCalled();
   });
 
   it("writes only the final answer JSON to stdout on success", async () => {
@@ -102,7 +102,7 @@ describe("CLI runner", () => {
 
     expect(code).toBe(0);
     expect(JSON.parse(stdout())).toEqual(output);
-    expect(stderr()).toBe("InterroGate URL: http://127.0.0.1:12345/s/test-token\n");
+    expect(stderr()).toBe("Loopmark URL: http://127.0.0.1:12345/s/test-token\n");
     expect(dependencies.openBrowser).not.toHaveBeenCalled();
     expect(close).toHaveBeenCalledTimes(1);
   });
@@ -150,7 +150,7 @@ describe("CLI runner", () => {
       })
     );
     const { dependencies } = createDependencies();
-    dependencies.startInterrogateServer = vi.fn(async () => {
+    dependencies.startLoopmarkServer = vi.fn(async () => {
       throw new Error("port unavailable");
     });
 
@@ -172,7 +172,7 @@ describe("CLI runner", () => {
       })
     );
     const { dependencies } = createDependencies();
-    dependencies.startInterrogateServer = vi.fn(async () => {
+    dependencies.startLoopmarkServer = vi.fn(async () => {
       throw "boom";
     });
 
@@ -181,7 +181,7 @@ describe("CLI runner", () => {
     expect(code).toBe(1);
     expect(JSON.parse(stderr())).toEqual({
       status: "error",
-      message: "Unexpected InterroGate error."
+      message: "Unexpected Loopmark error."
     });
   });
 });

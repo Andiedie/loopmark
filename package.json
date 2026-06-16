@@ -1,10 +1,10 @@
 {
-  "name": "interrogate",
+  "name": "loopmark",
   "version": "0.1.0",
   "description": "Local human input gate for AI agents.",
   "type": "module",
   "bin": {
-    "interrogate": "./dist/cli/index.js"
+    "loopmark": "./dist/cli/index.js"
   },
   "files": [
     "dist",

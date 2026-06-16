@@ -9,7 +9,7 @@ import type { SubmitPayload } from "../src/shared/answer-state";
 let tempDir: string;
 
 beforeEach(async () => {
-  tempDir = await mkdtemp(join(tmpdir(), "interrogate-test-"));
+  tempDir = await mkdtemp(join(tmpdir(), "loopmark-test-"));
 });
 
 afterEach(async () => {

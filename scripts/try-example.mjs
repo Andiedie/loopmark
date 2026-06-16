@@ -16,7 +16,7 @@ if (!existsSync(resolvedExample)) {
 }
 
 if (!existsSync(cliPath) || !existsSync(webIndexPath)) {
-  process.stderr.write("Building InterroGate before starting the example...\n");
+  process.stderr.write("Building Loopmark before starting the example...\n");
   await run(packageCommand("pnpm"), ["build"], {
     cwd: root,
     stdio: ["ignore", "ignore", "inherit"]

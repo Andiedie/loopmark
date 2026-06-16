@@ -1,7 +1,7 @@
 import type { Readable, Writable } from "node:stream";
 import { parseInputJson, type NormalizedSession } from "../shared/schema";
-import { InterrogateInputError } from "../shared/errors";
-import { startInterrogateServer, type RunningInterrogateServer } from "../server/http";
+import { LoopmarkInputError } from "../shared/errors";
+import { startLoopmarkServer, type RunningLoopmarkServer } from "../server/http";
 import { openBrowser, type OpenBrowserResult } from "../server/open-browser";
 
 export type CliRuntime = {
@@ -14,13 +14,13 @@ export type CliRuntime = {
 
 export type CliDependencies = {
   parseInputJson: (input: string) => NormalizedSession;
-  startInterrogateServer: (session: NormalizedSession) => Promise<RunningInterrogateServer>;
+  startLoopmarkServer: (session: NormalizedSession) => Promise<RunningLoopmarkServer>;
   openBrowser: (url: string) => Promise<OpenBrowserResult>;
 };
 
 const defaultDependencies: CliDependencies = {
   parseInputJson,
-  startInterrogateServer,
+  startLoopmarkServer,
   openBrowser
 };
 
@@ -31,19 +31,19 @@ export async function runCli(
   const args = new Set(runtime.argv.slice(2));
 
   if (args.has("--help") || args.has("-h")) {
-    runtime.stdout.write("Usage: cat questions.json | interrogate [--no-open]\n");
+    runtime.stdout.write("Usage: cat questions.json | loopmark [--no-open]\n");
     return 0;
   }
 
-  let runningServer: RunningInterrogateServer | undefined;
+  let runningServer: RunningLoopmarkServer | undefined;
 
   try {
     const input = await readStdin(runtime.stdin);
     const session = dependencies.parseInputJson(input);
-    runningServer = await dependencies.startInterrogateServer(session);
-    runtime.stderr.write(`InterroGate URL: ${runningServer.url}\n`);
+    runningServer = await dependencies.startLoopmarkServer(session);
+    runtime.stderr.write(`Loopmark URL: ${runningServer.url}\n`);
 
-    if (!args.has("--no-open") && runtime.env.INTERROGATE_NO_OPEN !== "1") {
+    if (!args.has("--no-open") && runtime.env.LOOPMARK_NO_OPEN !== "1") {
       const opened = await dependencies.openBrowser(runningServer.url);
       if (!opened.ok) {
         runtime.stderr.write(`Could not open browser automatically: ${opened.error}\n`);
@@ -55,12 +55,12 @@ export async function runCli(
     runtime.stdout.write(`${JSON.stringify(output)}\n`);
     return 0;
   } catch (error) {
-    if (error instanceof InterrogateInputError) {
+    if (error instanceof LoopmarkInputError) {
       runtime.stderr.write(`${JSON.stringify(error.report)}\n`);
       return 1;
     }
 
-    const message = error instanceof Error ? error.message : "Unexpected InterroGate error.";
+    const message = error instanceof Error ? error.message : "Unexpected Loopmark error.";
     runtime.stderr.write(`${JSON.stringify({ status: "error", message })}\n`);
     return 1;
   } finally {
