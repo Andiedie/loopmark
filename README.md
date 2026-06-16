@@ -46,6 +46,17 @@ pnpm test:e2e
 pnpm build
 ```
 
+## Release
+
+Publishing is handled by GitHub Actions when a version tag is pushed. The tag must match `package.json`, for example:
+
+```bash
+git tag v0.0.1
+git push origin v0.0.1
+```
+
+The release workflow can publish with npm Trusted Publishing, or with a GitHub `NPM_TOKEN` secret while bootstrapping the package.
+
 ## Input Shape
 
 Use either top-level `fields` or grouped `groups`.
