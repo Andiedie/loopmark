@@ -1,6 +1,6 @@
 {
   "name": "@andie/loopmark",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Local human input gate for AI agents.",
   "keywords": [
     "ai",
@@ -24,6 +24,7 @@
     "loopmark": "dist/cli/index.js"
   },
   "files": [
+    "assets",
     "dist",
     "skills",
     "README.md",

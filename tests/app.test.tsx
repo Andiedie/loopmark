@@ -43,7 +43,28 @@ describe("Loopmark UI", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+    document.title = "Loopmark";
     window.history.pushState({}, "", "/");
+  });
+
+  it("uses the session title in the browser title and shows the logo mark in the header", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.startsWith("/api/session")) {
+        return new Response(JSON.stringify(session), { status: 200 });
+      }
+
+      return new Response("Not found", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.pushState({}, "", "/s/test-token");
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Need input" });
+    await waitFor(() => expect(document.title).toBe("Need input - Loopmark"));
+
+    expect(screen.getByRole("img", { name: "Loopmark" })).toHaveAttribute("src", "/icon-192.png");
+    expect(screen.queryByText(/^Loopmark$/)).not.toBeInTheDocument();
   });
 
   it("loads a session, validates required fields, adds custom choice, and submits", async () => {

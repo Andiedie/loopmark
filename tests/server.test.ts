@@ -15,6 +15,9 @@ beforeEach(async () => {
   await writeFile(join(tempDir, "index.html"), "<div id=\"root\">Loopmark</div>");
   await mkdir(join(tempDir, "assets"));
   await writeFile(join(tempDir, "assets", "asset.js"), "console.log('asset');");
+  await writeFile(join(tempDir, "favicon.ico"), "ico");
+  await writeFile(join(tempDir, "favicon-32x32.png"), "png");
+  await writeFile(join(tempDir, "site.webmanifest"), "{}");
 });
 
 afterEach(async () => {
@@ -235,6 +238,15 @@ describe("local HTTP server", () => {
     expect((await fetch(running.url)).status).toBe(200);
     expect((await fetch(`http://127.0.0.1:${running.port}/assets/asset.js`)).headers.get("content-type")).toContain(
       "text/javascript"
+    );
+    expect((await fetch(`http://127.0.0.1:${running.port}/favicon.ico`)).headers.get("content-type")).toContain(
+      "image/x-icon"
+    );
+    expect((await fetch(`http://127.0.0.1:${running.port}/favicon-32x32.png`)).headers.get("content-type")).toContain(
+      "image/png"
+    );
+    expect((await fetch(`http://127.0.0.1:${running.port}/site.webmanifest`)).headers.get("content-type")).toContain(
+      "application/manifest+json"
     );
     await writeFile(join(tempDir, "assets", "file.unknown"), "raw");
     expect((await fetch(`http://127.0.0.1:${running.port}/assets/file.unknown`)).headers.get("content-type")).toBe(

@@ -30,6 +30,7 @@ const MIME_TYPES: Record<string, string> = {
   ".js": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".json": "application/json; charset=utf-8",
+  ".webmanifest": "application/manifest+json; charset=utf-8",
   ".svg": "image/svg+xml",
   ".ico": "image/x-icon",
   ".png": "image/png",
@@ -38,6 +39,17 @@ const MIME_TYPES: Record<string, string> = {
   ".woff": "font/woff",
   ".woff2": "font/woff2"
 };
+
+const ROOT_STATIC_FILES = new Set([
+  "apple-touch-icon.png",
+  "favicon.ico",
+  "favicon-16x16.png",
+  "favicon-32x32.png",
+  "favicon-48x48.png",
+  "icon-192.png",
+  "icon-512.png",
+  "site.webmanifest"
+]);
 
 const MAX_JSON_BODY_LENGTH = 1024 * 1024;
 
@@ -199,6 +211,11 @@ async function handleRequest(input: {
 
   if (requestUrl.pathname.startsWith("/assets/")) {
     return serveFile(response, webRoot, requestUrl.pathname.slice(1));
+  }
+
+  const rootStaticFile = requestUrl.pathname.slice(1);
+  if (ROOT_STATIC_FILES.has(rootStaticFile)) {
+    return serveFile(response, webRoot, rootStaticFile);
   }
 
   return writeJson(response, 404, { error: "Not found." });

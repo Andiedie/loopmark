@@ -1,6 +1,10 @@
-# Loopmark
+<p align="center">
+  <img src="assets/brand/loopmark-logo-readme.png" alt="Loopmark logo" width="96" height="96">
+</p>
 
-Loopmark helps AI agents ask humans at the right moment.
+<h1 align="center">Loopmark</h1>
+
+<p align="center">Loopmark helps AI agents ask humans at the right moment.</p>
 
 Agents can inspect code, run tests, read docs, and search the web on their own. But some questions still belong to a person: product tradeoffs, preferences, approvals, private local context, ranked priorities, or secrets. Loopmark gives agents a local, structured way to pause, ask, and continue.
 

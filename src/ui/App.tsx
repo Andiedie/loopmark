@@ -117,6 +117,10 @@ export function App() {
     };
   }, [token]);
 
+  useEffect(() => {
+    document.title = session ? `${session.title} - Loopmark` : "Loopmark";
+  }, [session]);
+
   const progress = useMemo(() => {
     if (!session) {
       return { required: 0, complete: 0, total: 0 };
@@ -235,8 +239,14 @@ export function App() {
     <main className="min-h-screen bg-paper-50 text-paper-ink">
       <header className="sticky top-0 z-20 border-b border-paper-line bg-paper-50">
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-5 py-4 md:flex-row md:items-center md:justify-between md:px-8 lg:px-10">
-          <div className="flex min-w-0 flex-col gap-1 md:flex-row md:items-baseline md:gap-4">
-            <p className="font-serif text-2xl leading-tight md:text-3xl">Loopmark</p>
+          <div className="flex min-w-0 items-center gap-3 md:gap-4">
+            <img
+              src="/icon-192.png"
+              alt="Loopmark"
+              className="h-8 w-8 shrink-0"
+              width={32}
+              height={32}
+            />
             <h1 className="min-w-0 max-w-2xl truncate text-sm text-paper-muted md:text-base">{session.title}</h1>
           </div>
           <div className="w-full md:w-80">
