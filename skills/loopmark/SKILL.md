@@ -22,11 +22,19 @@ Loopmark is a cloud-only human-input handoff for agents. Use it to create an enc
 
 1. Decide whether human input is necessary. If the issue is discoverable, research or reproduce it instead.
 2. Build a Loopmark session JSON object with `title` and either `fields` or `groups`.
-3. Run the cloud create command with the JSON on stdin:
+3. Run the cloud create command with the JSON on stdin. Use either inline stdin for short sessions or file redirection when the JSON already exists or is easier to inspect:
 
 ```bash
-npx @andie/loopmark < /path/to/questions.json
+printf '%s\n' '{"title":"Need your decision","fields":[{"id":"direction","label":"Which direction should I take?","type":"choice","mode":"single","options":["Small fix","Broader cleanup"]}]}' | npx --yes @andie/loopmark
 ```
+
+If the session JSON already exists as a file, redirect it instead:
+
+```bash
+npx --yes @andie/loopmark < /path/to/questions.json
+```
+
+`--yes` belongs to `npx`; it prevents package-runner install prompts. It is not a Loopmark CLI option.
 
 4. Parse stdout from the create command. It has `status`, `fillUrl`, `receiptFile`, and `sessionId`.
 5. Send only `fillUrl` to the human. Keep `receiptFile` local; it contains the answer decryption key.
@@ -34,7 +42,7 @@ npx @andie/loopmark < /path/to/questions.json
 7. When the human says the form is submitted, run:
 
 ```bash
-npx @andie/loopmark collect /path/to/s_xxx.receipt.json
+npx --yes @andie/loopmark collect /path/to/s_xxx.receipt.json
 ```
 
 8. Parse stdout from `collect`. If it returns `status: "pending"`, tell the human the form is not submitted yet and wait again. If it returns `status: "submitted"`, incorporate the answers into the work.

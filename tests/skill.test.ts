@@ -39,8 +39,11 @@ describe("bundled Loopmark skill", () => {
 
     expect(skill).toContain("Do not ask the human for information you can reasonably discover");
     expect(skill).toContain("real human decision");
-    expect(skill).toContain("npx @andie/loopmark < /path/to/questions.json");
-    expect(skill).toContain("npx @andie/loopmark collect /path/to/s_xxx.receipt.json");
+    expect(skill).toContain("printf '%s\\n'");
+    expect(skill).toContain("| npx --yes @andie/loopmark");
+    expect(skill).toContain("npx --yes @andie/loopmark < /path/to/questions.json");
+    expect(skill).toContain("npx --yes @andie/loopmark collect /path/to/s_xxx.receipt.json");
+    expect(skill).toContain("`--yes` belongs to `npx`");
     expect(skill).toContain("Do not poll");
     expect(skill).not.toContain("pnpx @andie/loopmark");
     expect(skill).not.toContain("already on PATH");
@@ -82,7 +85,9 @@ describe("bundled Loopmark skill", () => {
     const readme = readFixture("../README.md");
 
     expect(protocol).toContain("Use another Loopmark server");
-    expect(protocol).toContain("npx @andie/loopmark --base-url https://your-loopmark.example");
+    expect(protocol).toContain("Create with inline stdin");
+    expect(protocol).toContain("Create with file redirection");
+    expect(protocol).toContain("npx --yes @andie/loopmark --base-url https://your-loopmark.example");
     expect(protocol).toContain("LOOPMARK_BASE_URL");
     expect(skill).toContain("#self-hosting-on-cloudflare");
     expect(readme).toContain("Self-Hosting On Cloudflare");

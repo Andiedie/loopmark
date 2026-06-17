@@ -7,11 +7,19 @@ Loopmark has two cloud commands:
 1. Create a cloud session from JSON on stdin.
 2. Collect the encrypted answer later with the local receipt file.
 
-Create:
+Create with inline stdin:
 
 ```bash
-npx @andie/loopmark < /path/to/questions.json
+printf '%s\n' '{"title":"Need your input","fields":[{"id":"decision","label":"What should I do next?","type":"text"}]}' | npx --yes @andie/loopmark
 ```
+
+Create with file redirection:
+
+```bash
+npx --yes @andie/loopmark < /path/to/questions.json
+```
+
+`--yes` belongs to `npx`; it prevents package-runner install prompts. It is not a Loopmark CLI option.
 
 Create stdout:
 
@@ -31,7 +39,7 @@ Keep the `receiptFile` path local. It contains the answer decryption key and is 
 Collect:
 
 ```bash
-npx @andie/loopmark collect /tmp/loopmark-receipts/s_xxx.receipt.json
+npx --yes @andie/loopmark collect /tmp/loopmark-receipts/s_xxx.receipt.json
 ```
 
 Collect stdout is either:
@@ -57,7 +65,7 @@ Do not poll. Run `collect` after the human explicitly says the form is submitted
 Use another Loopmark server with:
 
 ```bash
-npx @andie/loopmark --base-url https://your-loopmark.example < /path/to/questions.json
+npx --yes @andie/loopmark --base-url https://your-loopmark.example < /path/to/questions.json
 ```
 
 or set `LOOPMARK_BASE_URL` in the agent runtime.
@@ -65,8 +73,8 @@ or set `LOOPMARK_BASE_URL` in the agent runtime.
 Use a custom receipt or secret directory only when the runtime needs one:
 
 ```bash
-npx @andie/loopmark --receipt-dir /path/to/receipts < /path/to/questions.json
-npx @andie/loopmark collect /path/to/s_xxx.receipt.json --secret-dir /path/to/secrets
+npx --yes @andie/loopmark --receipt-dir /path/to/receipts < /path/to/questions.json
+npx --yes @andie/loopmark collect /path/to/s_xxx.receipt.json --secret-dir /path/to/secrets
 ```
 
 ## Security Model
