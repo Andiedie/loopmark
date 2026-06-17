@@ -2,7 +2,7 @@
 
 ## CLI Contract
 
-Loopmark has two commands:
+Loopmark has two cloud commands:
 
 1. Create a cloud session from JSON on stdin.
 2. Collect the encrypted answer later with the local receipt file.
@@ -11,10 +11,7 @@ Create:
 
 ```bash
 npx @andie/loopmark < /path/to/questions.json
-pnpx @andie/loopmark < /path/to/questions.json
 ```
-
-If `loopmark` is already on PATH, `loopmark < /path/to/questions.json` is also valid.
 
 Create stdout:
 
@@ -28,6 +25,8 @@ Create stdout:
 ```
 
 Create stderr may repeat the URL and receipt path for human readability. Do not parse stderr as the machine-readable result unless the command exits non-zero with a validation report.
+
+Keep the `receiptFile` path local. It contains the answer decryption key and is required for collection.
 
 Collect:
 
@@ -55,17 +54,24 @@ or:
 
 Do not poll. Run `collect` after the human explicitly says the form is submitted. If `collect` returns `pending`, tell the human it is still pending and wait again.
 
-Use a custom deployment with:
+Use another Loopmark server with:
 
 ```bash
 npx @andie/loopmark --base-url https://your-loopmark.example < /path/to/questions.json
 ```
 
-or set `LOOPMARK_BASE_URL`.
+or set `LOOPMARK_BASE_URL` in the agent runtime.
+
+Use a custom receipt or secret directory only when the runtime needs one:
+
+```bash
+npx @andie/loopmark --receipt-dir /path/to/receipts < /path/to/questions.json
+npx @andie/loopmark collect /path/to/s_xxx.receipt.json --secret-dir /path/to/secrets
+```
 
 ## Security Model
 
-The public fill URL contains only a session code in the URL hash. The local receipt file contains the answer decryption key. Do not share receipt files in chat, logs, commits, or issue comments.
+The public fill URL contains only a session code in the URL hash. The local receipt file contains the answer decryption key. Do not share receipt files in chat, logs, commits, issue comments, or messages to the human.
 
 The Worker and R2 only store encrypted JSON envelopes. Browser submissions include a session-code-derived proof, so knowing a `sessionId` alone is not enough to submit an answer. Secret answers are encrypted in the browser, decrypted during `collect`, written to a local temporary file, and omitted from stdout.
 
@@ -231,3 +237,12 @@ Invalid input exits non-zero and writes an agent-readable report to stderr:
 ```
 
 When validation fails, fix the JSON and rerun Loopmark instead of asking the human to work around a malformed session.
+
+Other CLI errors exit non-zero and write JSON to stderr:
+
+```json
+{
+  "status": "error",
+  "message": "Option --base-url requires a value."
+}
+```

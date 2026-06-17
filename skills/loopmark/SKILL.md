@@ -1,13 +1,13 @@
 ---
 name: loopmark
-description: "Use when an AI agent needs to pause for human input through the Loopmark CLI: product decisions, preferences, approvals, private details, ranked options, or secrets that should stay out of chat/stdout. Do not use for facts the agent can verify from code, logs, docs, tests, or web research."
+description: "Use when an AI agent needs structured human input through the cloud-only Loopmark CLI: product decisions, preferences, approvals, private details, ranked priorities, or secrets that should stay out of chat/stdout. Do not use for facts the agent can verify from code, logs, docs, tests, APIs, or web research."
 ---
 
 # Loopmark
 
 ## Overview
 
-Loopmark is a cloud human-input handoff for agents. Use it to ask the human a compact, structured set of questions, then continue later from the JSON result collected with the local receipt file.
+Loopmark is a cloud-only human-input handoff for agents. Use it to create an encrypted public fill page, give the URL to the human, then collect the encrypted answer later with the local receipt file.
 
 ## Operating Principles
 
@@ -15,28 +15,22 @@ Loopmark is a cloud human-input handoff for agents. Use it to ask the human a co
 - Use Loopmark when the blocker is a real human decision: product tradeoff, preference, approval, private context, credential, or ranked priority.
 - Ask the smallest useful question set. Prefer 1-5 high-signal fields with clear labels, tradeoffs, and useful defaults.
 - Prefer choices for product decisions, rankings for priority ordering, multiline text for nuanced context, and secret text only for sensitive values.
-- Treat stderr as operational output and stdout as the only machine-readable stream.
-- Do not poll. After creating a Loopmark session, wait for the human to say they submitted it before running `collect`.
+- Treat stdout as the only machine-readable stream. Treat stderr as human-readable operational output.
+- Do not poll. Create once, wait for the human to say they submitted the form, then run `collect` once.
 
 ## Workflow
 
 1. Decide whether human input is necessary. If the issue is discoverable, research or reproduce it instead.
 2. Build a Loopmark session JSON object with `title` and either `fields` or `groups`.
-3. Run Loopmark with JSON on stdin through the package runner available in the environment:
+3. Run the cloud create command with the JSON on stdin:
 
 ```bash
 npx @andie/loopmark < /path/to/questions.json
 ```
 
-```bash
-pnpx @andie/loopmark < /path/to/questions.json
-```
-
-If `loopmark` is already on PATH, `loopmark < /path/to/questions.json` is also acceptable.
-
 4. Parse stdout from the create command. It has `status`, `fillUrl`, `receiptFile`, and `sessionId`.
-5. Send `fillUrl` to the human and explicitly say you will continue after they submit the form.
-6. Stop waiting on tools. Do not rerun the create command. Do not run `collect` repeatedly.
+5. Send only `fillUrl` to the human. Keep `receiptFile` local; it contains the answer decryption key.
+6. Tell the human you will continue after they submit the form. Then stop tool activity for this wait. Do not rerun create and do not run `collect` repeatedly.
 7. When the human says the form is submitted, run:
 
 ```bash
@@ -89,4 +83,6 @@ For a self-hosted Loopmark service, pass `--base-url https://your-loopmark.examp
 
 ## Protocol Reference
 
-Read `references/protocol.md` when constructing grouped sessions, using secrets, setting choice defaults, interpreting output shapes, using a custom base URL, or debugging validation errors.
+Read `references/protocol.md` when constructing grouped sessions, using secrets, setting choice defaults, interpreting output shapes, specifying another Loopmark server with `--base-url` / `LOOPMARK_BASE_URL`, or debugging validation and collection errors.
+
+Deployment is human-facing project setup, not part of the agent handoff protocol. If the human asks how to deploy Loopmark, point them to the README self-hosting docs: https://github.com/Andiedie/loopmark#self-hosting-on-cloudflare

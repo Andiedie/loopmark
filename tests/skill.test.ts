@@ -21,7 +21,7 @@ function frontmatter(markdown: string): Record<string, string> {
 }
 
 describe("bundled Loopmark skill", () => {
-  it("uses standard skill metadata and links its protocol reference", () => {
+  it("uses standard skill metadata and links its references", () => {
     const skill = readFixture("../skills/loopmark/SKILL.md");
     const metadata = frontmatter(skill);
 
@@ -30,6 +30,8 @@ describe("bundled Loopmark skill", () => {
     expect(metadata.description.length).toBeLessThanOrEqual(1024);
     expect(skill).not.toContain("[TODO");
     expect(skill).toContain("references/protocol.md");
+    expect(skill).not.toContain("references/deployment.md");
+    expect(skill).toContain("https://github.com/Andiedie/loopmark#self-hosting-on-cloudflare");
   });
 
   it("keeps a strict human-input boundary and avoids polling", () => {
@@ -38,9 +40,10 @@ describe("bundled Loopmark skill", () => {
     expect(skill).toContain("Do not ask the human for information you can reasonably discover");
     expect(skill).toContain("real human decision");
     expect(skill).toContain("npx @andie/loopmark < /path/to/questions.json");
-    expect(skill).toContain("pnpx @andie/loopmark < /path/to/questions.json");
     expect(skill).toContain("npx @andie/loopmark collect /path/to/s_xxx.receipt.json");
     expect(skill).toContain("Do not poll");
+    expect(skill).not.toContain("pnpx @andie/loopmark");
+    expect(skill).not.toContain("already on PATH");
     expect(skill).not.toContain("--no-open");
   });
 
@@ -70,5 +73,19 @@ describe("bundled Loopmark skill", () => {
     const packageJson = JSON.parse(readFixture("../package.json")) as { files?: string[] };
 
     expect(packageJson.files).toContain("skills");
+  });
+
+  it("keeps custom base URL in the protocol and deployment details in the README", () => {
+    const skill = readFixture("../skills/loopmark/SKILL.md");
+    const protocol = readFixture("../skills/loopmark/references/protocol.md");
+    const readme = readFixture("../README.md");
+
+    expect(protocol).toContain("Use another Loopmark server");
+    expect(protocol).toContain("npx @andie/loopmark --base-url https://your-loopmark.example");
+    expect(protocol).toContain("LOOPMARK_BASE_URL");
+    expect(skill).toContain("#self-hosting-on-cloudflare");
+    expect(readme).toContain("Self-Hosting On Cloudflare");
+    expect(readme).toContain("CLOUDFLARE_ACCOUNT_ID");
+    expect(readme).toContain("CLOUDFLARE_API_TOKEN");
   });
 });
