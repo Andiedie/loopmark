@@ -1,27 +1,28 @@
 ---
 name: loopmark
-description: "Use when an AI agent needs to pause for local human input through the Loopmark CLI: product decisions, preferences, approvals, private local details, ranked options, or secrets that should stay out of chat/stdout. Do not use for facts the agent can verify from code, logs, docs, tests, or web research."
+description: "Use when an AI agent needs to pause for human input through the Loopmark CLI: product decisions, preferences, approvals, private details, ranked options, or secrets that should stay out of chat/stdout. Do not use for facts the agent can verify from code, logs, docs, tests, or web research."
 ---
 
 # Loopmark
 
 ## Overview
 
-Loopmark is a local human-input gate for agents. Use it to ask the human a compact, structured set of questions, then continue from the JSON result written to stdout.
+Loopmark is a cloud human-input handoff for agents. Use it to ask the human a compact, structured set of questions, then continue later from the JSON result collected with the local receipt file.
 
 ## Operating Principles
 
 - Investigate first. Do not ask the human for information you can reasonably discover from the repository, logs, tests, documentation, APIs, or web research.
-- Use Loopmark when the blocker is a real human decision: product tradeoff, preference, approval, private context, local credential, or ranked priority.
+- Use Loopmark when the blocker is a real human decision: product tradeoff, preference, approval, private context, credential, or ranked priority.
 - Ask the smallest useful question set. Prefer 1-5 high-signal fields with clear labels, tradeoffs, and useful defaults.
 - Prefer choices for product decisions, rankings for priority ordering, multiline text for nuanced context, and secret text only for sensitive values.
-- Treat stderr as operational output and stdout as the only machine-readable final answer stream.
+- Treat stderr as operational output and stdout as the only machine-readable stream.
+- Do not poll. After creating a Loopmark session, wait for the human to say they submitted it before running `collect`.
 
 ## Workflow
 
 1. Decide whether human input is necessary. If the issue is discoverable, research or reproduce it instead.
 2. Build a Loopmark session JSON object with `title` and either `fields` or `groups`.
-3. Run Loopmark with JSON on stdin through the package runner available in the environment. These commands open the browser by default:
+3. Run Loopmark with JSON on stdin through the package runner available in the environment:
 
 ```bash
 npx @andie/loopmark < /path/to/questions.json
@@ -33,9 +34,19 @@ pnpx @andie/loopmark < /path/to/questions.json
 
 If `loopmark` is already on PATH, `loopmark < /path/to/questions.json` is also acceptable.
 
-4. Share the URL printed on stderr with the human if the browser did not open automatically.
-5. Keep the command running until Loopmark writes the final JSON result to stdout.
-6. Parse stdout, incorporate the answers into the work, and avoid exposing secret file contents unless the task truly requires reading them.
+4. Parse stdout from the create command. It has `status`, `fillUrl`, `receiptFile`, and `sessionId`.
+5. Send `fillUrl` to the human and explicitly say you will continue after they submit the form.
+6. Stop waiting on tools. Do not rerun the create command. Do not run `collect` repeatedly.
+7. When the human says the form is submitted, run:
+
+```bash
+npx @andie/loopmark collect /path/to/s_xxx.receipt.json
+```
+
+8. Parse stdout from `collect`. If it returns `status: "pending"`, tell the human the form is not submitted yet and wait again. If it returns `status: "submitted"`, incorporate the answers into the work.
+9. Avoid exposing secret file contents unless the task truly requires reading them.
+
+For a self-hosted Loopmark service, pass `--base-url https://your-loopmark.example` on the create command or set `LOOPMARK_BASE_URL`.
 
 ## Minimal Session
 
@@ -78,4 +89,4 @@ If `loopmark` is already on PATH, `loopmark < /path/to/questions.json` is also a
 
 ## Protocol Reference
 
-Read `references/protocol.md` when constructing grouped sessions, using secrets, setting choice defaults, interpreting output shapes, or debugging validation errors.
+Read `references/protocol.md` when constructing grouped sessions, using secrets, setting choice defaults, interpreting output shapes, using a custom base URL, or debugging validation errors.

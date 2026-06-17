@@ -3,6 +3,13 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { App } from "../src/ui/App";
 import { normalizeSession, type NormalizedSession } from "../src/shared/schema";
+import type { SubmitPayload } from "../src/shared/answer-state";
+import {
+  assertAnswerSubmissionEnvelope,
+  createRemoteSessionPackage,
+  decryptAnswerEnvelope,
+  type RemoteSessionPackage
+} from "../src/shared/cloud-protocol";
 
 const session: NormalizedSession = {
   title: "Need input",
@@ -39,6 +46,55 @@ const session: NormalizedSession = {
   ]
 };
 
+type CloudSessionMock = RemoteSessionPackage & {
+  fetchMock: ReturnType<typeof vi.fn>;
+};
+
+type CloudSessionOptions = {
+  onAnswer?: (payload: SubmitPayload, rawBody: string) => void | Promise<void>;
+  submitResponse?: Response;
+  sessionResponse?: Response;
+};
+
+async function installCloudSession(
+  loadedSession: NormalizedSession,
+  options: CloudSessionOptions = {}
+): Promise<CloudSessionMock> {
+  const remote = await createRemoteSessionPackage({
+    session: loadedSession,
+    baseUrl: "https://loopmark.test"
+  });
+  const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    const path = new URL(url, "https://loopmark.test").pathname;
+
+    if (path === `/api/sessions/${remote.sessionId}`) {
+      return options.sessionResponse ?? new Response(JSON.stringify(remote.envelope), { status: 200 });
+    }
+
+    if (path === `/api/sessions/${remote.sessionId}/answer`) {
+      const rawBody = String(init?.body ?? "");
+      const submission = JSON.parse(rawBody) as unknown;
+      assertAnswerSubmissionEnvelope(submission);
+      const payload = await decryptAnswerEnvelope({ receipt: remote.receipt, envelope: submission.envelope });
+      await options.onAnswer?.(payload, rawBody);
+      return options.submitResponse ?? new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }
+
+    return new Response("Not found", { status: 404 });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  const fillUrl = new URL(remote.fillUrl);
+  window.history.pushState({}, "", `${fillUrl.pathname}${fillUrl.hash}`);
+  return { ...remote, fetchMock };
+}
+
+async function renderCloudApp(loadedSession: NormalizedSession, options?: CloudSessionOptions): Promise<CloudSessionMock> {
+  const remote = await installCloudSession(loadedSession, options);
+  render(<App />);
+  return remote;
+}
+
 describe("Loopmark UI", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -48,17 +104,7 @@ describe("Loopmark UI", () => {
   });
 
   it("uses the session title in the browser title and shows the logo mark in the header", async () => {
-    const fetchMock = vi.fn(async (url: string) => {
-      if (url.startsWith("/api/session")) {
-        return new Response(JSON.stringify(session), { status: 200 });
-      }
-
-      return new Response("Not found", { status: 404 });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    window.history.pushState({}, "", "/s/test-token");
-
-    render(<App />);
+    await renderCloudApp(session);
 
     await screen.findByRole("heading", { name: "Need input" });
     await waitFor(() => expect(document.title).toBe("Need input - Loopmark"));
@@ -68,23 +114,17 @@ describe("Loopmark UI", () => {
   });
 
   it("loads a session, validates required fields, adds custom choice, and submits", async () => {
-    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      if (url.startsWith("/api/session")) {
-        return new Response(JSON.stringify(session), { status: 200 });
+    await renderCloudApp(session, {
+      onAnswer: (payload, rawBody) => {
+        expect(payload.answers.style).toEqual({
+          type: "choice",
+          items: [{ label: "Custom direction" }]
+        });
+        expect(rawBody).not.toContain("Custom direction");
       }
-
-      if (url.startsWith("/api/submit")) {
-        expect(init?.body).toContain("Custom direction");
-        return new Response(JSON.stringify({ ok: true }), { status: 200 });
-      }
-
-      return new Response("Not found", { status: 404 });
     });
-    vi.stubGlobal("fetch", fetchMock);
-    window.history.pushState({}, "", "/s/test-token");
 
     const user = userEvent.setup();
-    render(<App />);
 
     expect((await screen.findAllByText("Need input")).length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: /submit inputs/i }));
@@ -137,18 +177,9 @@ describe("Loopmark UI", () => {
         }
       ]
     };
-    const fetchMock = vi.fn(async (url: string) => {
-      if (url.startsWith("/api/session")) {
-        return new Response(JSON.stringify(groupedSession), { status: 200 });
-      }
-
-      return new Response("Not found", { status: 404 });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    window.history.pushState({}, "", "/s/test-token");
+    await renderCloudApp(groupedSession);
 
     const user = userEvent.setup();
-    render(<App />);
 
     await screen.findByRole("button", { name: /Blocked section/i });
     await user.click(screen.getByRole("button", { name: /Blocked section/i }));
@@ -161,18 +192,9 @@ describe("Loopmark UI", () => {
   });
 
   it("keeps choice details collapsed until the user asks to edit them", async () => {
-    const fetchMock = vi.fn(async (url: string) => {
-      if (url.startsWith("/api/session")) {
-        return new Response(JSON.stringify(session), { status: 200 });
-      }
-
-      return new Response("Not found", { status: 404 });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    window.history.pushState({}, "", "/s/test-token");
+    await renderCloudApp(session);
 
     const user = userEvent.setup();
-    render(<App />);
 
     await screen.findByText("Style");
     await user.click(screen.getByRole("button", { name: "Simple" }));
@@ -225,18 +247,9 @@ describe("Loopmark UI", () => {
         }
       ]
     };
-    const fetchMock = vi.fn(async (url: string) => {
-      if (url.startsWith("/api/session")) {
-        return new Response(JSON.stringify(detailedSession), { status: 200 });
-      }
-
-      return new Response("Not found", { status: 404 });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    window.history.pushState({}, "", "/s/test-token");
+    await renderCloudApp(detailedSession);
 
     const user = userEvent.setup();
-    render(<App />);
 
     await screen.findByText("Elegant document-like layout.");
     expect(screen.queryByText("Details")).not.toBeInTheDocument();
@@ -248,18 +261,9 @@ describe("Loopmark UI", () => {
   });
 
   it("keeps custom options and edited descriptions when switching choices", async () => {
-    const fetchMock = vi.fn(async (url: string) => {
-      if (url.startsWith("/api/session")) {
-        return new Response(JSON.stringify(session), { status: 200 });
-      }
-
-      return new Response("Not found", { status: 404 });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    window.history.pushState({}, "", "/s/test-token");
+    await renderCloudApp(session);
 
     const user = userEvent.setup();
-    render(<App />);
 
     await screen.findByText("Style");
     await user.click(screen.getByRole("button", { name: /Add custom answer/i }));
@@ -310,18 +314,9 @@ describe("Loopmark UI", () => {
         }
       ]
     };
-    const fetchMock = vi.fn(async (url: string) => {
-      if (url.startsWith("/api/session")) {
-        return new Response(JSON.stringify(rankingSession), { status: 200 });
-      }
-
-      return new Response("Not found", { status: 404 });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    window.history.pushState({}, "", "/s/test-token");
+    await renderCloudApp(rankingSession);
 
     const user = userEvent.setup();
-    render(<App />);
 
     await screen.findByText("Rank priorities");
     await user.click(screen.getByRole("button", { name: "Edit details" }));
@@ -364,24 +359,16 @@ describe("Loopmark UI", () => {
         }
       ]
     });
-    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      if (url.startsWith("/api/session")) {
-        return new Response(JSON.stringify(lockedSession), { status: 200 });
+    await renderCloudApp(lockedSession, {
+      onAnswer: (payload, rawBody) => {
+        expect(JSON.stringify(payload)).toContain("Updated style detail.");
+        expect(JSON.stringify(payload)).toContain("Updated ranking detail.");
+        expect(rawBody).not.toContain("Updated style detail.");
+        expect(rawBody).not.toContain("Updated ranking detail.");
       }
-
-      if (url.startsWith("/api/submit")) {
-        expect(init?.body).toContain("Updated style detail.");
-        expect(init?.body).toContain("Updated ranking detail.");
-        return new Response(JSON.stringify({ ok: true }), { status: 200 });
-      }
-
-      return new Response("Not found", { status: 404 });
     });
-    vi.stubGlobal("fetch", fetchMock);
-    window.history.pushState({}, "", "/s/test-token");
 
     const user = userEvent.setup();
-    render(<App />);
 
     await screen.findByText("Pick a style");
     const styleField = within(document.querySelector("#field-style") as HTMLElement);
@@ -410,19 +397,10 @@ describe("Loopmark UI", () => {
   });
 
   it("resets a changed field after confirmation", async () => {
-    const fetchMock = vi.fn(async (url: string) => {
-      if (url.startsWith("/api/session")) {
-        return new Response(JSON.stringify(session), { status: 200 });
-      }
-
-      return new Response("Not found", { status: 404 });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    window.history.pushState({}, "", "/s/test-token");
+    await renderCloudApp(session);
     const confirmMock = vi.spyOn(window, "confirm").mockReturnValue(true);
 
     const user = userEvent.setup();
-    render(<App />);
 
     const notes = await screen.findByLabelText(/Notes/);
     await user.type(notes, "Temporary edit");
@@ -433,11 +411,16 @@ describe("Loopmark UI", () => {
   });
 
   it("shows the load error screen when the session request fails", async () => {
+    const remote = await createRemoteSessionPackage({
+      session,
+      baseUrl: "https://loopmark.test"
+    });
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => new Response("Forbidden", { status: 403 }))
     );
-    window.history.pushState({}, "", "/s/test-token");
+    const fillUrl = new URL(remote.fillUrl);
+    window.history.pushState({}, "", `${fillUrl.pathname}${fillUrl.hash}`);
 
     render(<App />);
 
@@ -445,23 +428,37 @@ describe("Loopmark UI", () => {
     expect(screen.getByText("Session request failed with 403.")).toBeInTheDocument();
   });
 
-  it("shows a submit error screen when the server rejects a locally valid answer", async () => {
-    const fetchMock = vi.fn(async (url: string) => {
-      if (url.startsWith("/api/session")) {
-        return new Response(JSON.stringify(session), { status: 200 });
-      }
-
-      if (url.startsWith("/api/submit")) {
-        return new Response("submit failed after validation", { status: 500 });
-      }
-
-      return new Response("Not found", { status: 404 });
-    });
+  it("shows a load error without fetching when the link has no session code", async () => {
+    const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    window.history.pushState({}, "", "/s/test-token");
+    window.history.pushState({}, "", "/s");
+
+    render(<App />);
+
+    expect(await screen.findByText("Unable to load Loopmark")).toBeInTheDocument();
+    expect(screen.getByText("This Loopmark link is missing a valid session code.")).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a session envelope that does not belong to the link", async () => {
+    const otherRemote = await createRemoteSessionPackage({
+      session,
+      baseUrl: "https://loopmark.test"
+    });
+    await renderCloudApp(session, {
+      sessionResponse: new Response(JSON.stringify(otherRemote.envelope), { status: 200 })
+    });
+
+    expect(await screen.findByText("Unable to load Loopmark")).toBeInTheDocument();
+    expect(screen.getByText("Loopmark session envelope does not match the link.")).toBeInTheDocument();
+  });
+
+  it("shows a submit error screen when the server rejects a locally valid answer", async () => {
+    await renderCloudApp(session, {
+      submitResponse: new Response("submit failed after validation", { status: 500 })
+    });
 
     const user = userEvent.setup();
-    render(<App />);
 
     await user.type(await screen.findByLabelText(/Notes/), "Ready to submit");
     await user.click(screen.getByRole("button", { name: "Simple" }));
@@ -472,19 +469,10 @@ describe("Loopmark UI", () => {
   });
 
   it("keeps an edited answer when reset confirmation is cancelled", async () => {
-    const fetchMock = vi.fn(async (url: string) => {
-      if (url.startsWith("/api/session")) {
-        return new Response(JSON.stringify(session), { status: 200 });
-      }
-
-      return new Response("Not found", { status: 404 });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    window.history.pushState({}, "", "/s/test-token");
+    await renderCloudApp(session);
     vi.spyOn(window, "confirm").mockReturnValue(false);
 
     const user = userEvent.setup();
-    render(<App />);
 
     const notes = await screen.findByLabelText(/Notes/);
     await user.type(notes, "Keep this edit");
@@ -494,19 +482,10 @@ describe("Loopmark UI", () => {
   });
 
   it("resets custom choice drafts together with the choice answer", async () => {
-    const fetchMock = vi.fn(async (url: string) => {
-      if (url.startsWith("/api/session")) {
-        return new Response(JSON.stringify(session), { status: 200 });
-      }
-
-      return new Response("Not found", { status: 404 });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    window.history.pushState({}, "", "/s/test-token");
+    await renderCloudApp(session);
     vi.spyOn(window, "confirm").mockReturnValue(true);
 
     const user = userEvent.setup();
-    render(<App />);
 
     await screen.findByText("Style");
     await user.click(screen.getByRole("button", { name: /Add custom answer/i }));
@@ -533,18 +512,9 @@ describe("Loopmark UI", () => {
         }
       ]
     });
-    const fetchMock = vi.fn(async (url: string) => {
-      if (url.startsWith("/api/session")) {
-        return new Response(JSON.stringify(groupedSession), { status: 200 });
-      }
-
-      return new Response("Not found", { status: 404 });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    window.history.pushState({}, "", "/s/test-token");
+    await renderCloudApp(groupedSession);
 
     const user = userEvent.setup();
-    render(<App />);
 
     expect(await screen.findByText("Top-level context for the review.")).toBeInTheDocument();
     expect(screen.getByText("Group-specific guidance.")).toBeInTheDocument();
@@ -558,21 +528,11 @@ describe("Loopmark UI", () => {
       title: "Secret review",
       fields: [{ id: "token", label: "Local token", type: "text", secret: true }]
     });
-    const fetchMock = vi.fn(async (url: string) => {
-      if (url.startsWith("/api/session")) {
-        return new Response(JSON.stringify(secretSession), { status: 200 });
-      }
-
-      return new Response("Not found", { status: 404 });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    window.history.pushState({}, "", "/s/test-token");
-
-    render(<App />);
+    await renderCloudApp(secretSession);
 
     const input = await screen.findByLabelText(/Local token/);
     expect(input).toHaveAttribute("type", "password");
-    expect(screen.getByText("Secret answer is written to a temporary file and omitted from stdout.")).toBeInTheDocument();
+    expect(screen.getByText("Secret answer is encrypted here and later written to a local file by the agent.")).toBeInTheDocument();
   });
 
   it("lets optional single choices toggle back to no answer", async () => {
@@ -580,18 +540,9 @@ describe("Loopmark UI", () => {
       title: "Optional choice",
       fields: [{ id: "decision", label: "Decision", type: "choice", options: ["A", "B"] }]
     });
-    const fetchMock = vi.fn(async (url: string) => {
-      if (url.startsWith("/api/session")) {
-        return new Response(JSON.stringify(optionalSession), { status: 200 });
-      }
-
-      return new Response("Not found", { status: 404 });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    window.history.pushState({}, "", "/s/test-token");
+    await renderCloudApp(optionalSession);
 
     const user = userEvent.setup();
-    render(<App />);
 
     const option = await screen.findByRole("button", { name: "A" });
     await user.click(option);

@@ -6,7 +6,7 @@
 
 <p align="center">Loopmark helps AI agents ask humans at the right moment.</p>
 
-Agents can inspect code, run tests, read docs, and search the web on their own. But some questions still belong to a person: product tradeoffs, preferences, approvals, private local context, ranked priorities, or secrets. Loopmark gives agents a local, structured way to pause, ask, and continue.
+Agents can inspect code, run tests, read docs, and search the web on their own. But some questions still belong to a person: product tradeoffs, preferences, approvals, private context, ranked priorities, or secrets. Loopmark gives agents a structured cloud handoff without making the agent keep a local process open.
 
 ## Install The Skill
 
@@ -27,7 +27,25 @@ After the skill is installed, your agent learns:
 - how to create a small structured question session;
 - how to run `@andie/loopmark` on demand with `npx`, `pnpx`, or the package runner available in your environment.
 
-When the agent needs your input, it starts a temporary local Loopmark page and opens it in your browser. You answer the questions there. Loopmark sends the final structured answers back to the agent through stdout, while URLs, logs, and validation errors stay on stderr.
+When the agent needs your input, it runs Loopmark once with a JSON session on stdin. The CLI encrypts the session, posts it to the Loopmark Worker, writes a local receipt file, prints a public fill URL, and exits immediately.
+
+You open the URL, answer in the browser, and tell the agent when you are done. The agent then runs `loopmark collect <receipt-file>` to fetch and decrypt the answer.
+
+```bash
+npx @andie/loopmark < questions.json
+```
+
+```bash
+npx @andie/loopmark collect /tmp/loopmark-receipts/s_xxx.receipt.json
+```
+
+Use a self-hosted deployment with:
+
+```bash
+npx @andie/loopmark --base-url https://your-loopmark.example < questions.json
+```
+
+or set `LOOPMARK_BASE_URL`.
 
 ## What Agents Should Ask
 
@@ -36,7 +54,7 @@ Loopmark is for human decisions, not agent shortcuts. The skill tells agents to 
 - product direction and scope boundaries;
 - preferences between several reasonable options;
 - approvals before an irreversible or risky action;
-- local private context that is not available in the repository;
+- private context that is not available in the repository;
 - ranked priorities;
 - sensitive values that should not appear in chat.
 
@@ -44,8 +62,52 @@ If the answer can be found through code, logs, tests, documentation, APIs, or we
 
 ## Privacy And Secrets
 
-Loopmark runs locally. Secret answers are written to a local temporary file and omitted from the final JSON answer payload. The agent receives a file path, not the secret value, and should read it only when the task truly requires it.
+Loopmark uses end-to-end encryption for question sessions and answers:
+
+- The public fill link contains only a `sessionCode` in the URL hash.
+- The Worker and R2 store encrypted JSON envelopes only.
+- Browser submissions include a `sessionCode`-derived proof so a leaked `sessionId` cannot submit or overwrite an answer.
+- The local receipt file contains the answer decryption key and should not be shared.
+- Secret answers are encrypted in the browser, decrypted only during `collect`, written to a local temporary file, and omitted from the final JSON payload.
+
+The agent receives a file path for secret answers, not the secret value, and should read it only when the task truly requires it.
+
+## Self-Hosting On Cloudflare
+
+The default service is `https://loopmark.ssoo.fun`. Forks can deploy their own Worker and use `--base-url` or `LOOPMARK_BASE_URL`.
+
+Cloudflare resources:
+
+- Workers: hosts the API and static fill page.
+- R2: stores encrypted session and answer envelopes under `sessions/{sessionId}/session.json` and `sessions/{sessionId}/answer.json`.
+- R2 lifecycle: delete objects under `sessions/` after your desired retention window.
+- Custom domain: bind your domain to the Worker manually in the Cloudflare dashboard.
+
+Recommended bucket name:
+
+```text
+loopmark-sessions
+```
+
+If you choose another bucket name, update `wrangler.jsonc`.
+
+GitHub Actions secrets for the included deploy workflow:
+
+- `CLOUDFLARE_ACCOUNT_ID`: Cloudflare account ID.
+- `CLOUDFLARE_API_TOKEN`: Cloudflare API token with account-scoped Workers Scripts edit and Workers R2 Storage edit permissions.
+
+GitHub Actions variables:
+
+- `LOOPMARK_BASE_URL`: optional, used as the production environment URL in GitHub Actions.
+
+Manual Cloudflare dashboard setup:
+
+1. Create the private R2 bucket, normally `loopmark-sessions`.
+2. Add an R2 lifecycle rule for prefix `sessions/`, for example delete after 1 day.
+3. Create a least-privilege API token for GitHub Actions.
+4. Add your custom domain to the deployed Worker, for example `loopmark.ssoo.fun`.
+5. Keep the R2 bucket private. Clients should call the Worker API, never R2 directly.
 
 ## For Agent Authors
 
-The skill contains the operational protocol at `skills/loopmark/SKILL.md` and `skills/loopmark/references/protocol.md`. Humans normally do not need to write Loopmark JSON by hand; the installed skill teaches the agent to generate the session, run the CLI, and parse the result.
+The skill contains the operational protocol at `skills/loopmark/SKILL.md` and `skills/loopmark/references/protocol.md`. Humans normally do not need to write Loopmark JSON by hand; the installed skill teaches the agent to generate the session, run the CLI, wait without polling, and collect the result after the human submits.

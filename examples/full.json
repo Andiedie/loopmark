@@ -1,6 +1,6 @@
 {
   "title": "Agent handoff review",
-  "description": "A comprehensive local review session covering text, choices, ranking, editable answers, custom options, defaults, and secrets.",
+  "description": "A comprehensive cloud handoff session covering text, choices, ranking, editable answers, custom options, defaults, and secrets.",
   "groups": [
     {
       "id": "context",
@@ -14,7 +14,7 @@
           "format": "markdown",
           "multiline": true,
           "required": true,
-          "default": "Loopmark is a local human-input gate for AI Agents. The next pass should prioritize product-quality UI and clear output."
+          "default": "Loopmark is a cloud human-input handoff for AI Agents. The next pass should prioritize product-quality UI and clear output."
         },
         {
           "id": "implementation_note",
@@ -81,7 +81,7 @@
             },
             {
               "label": "Secret file output",
-              "description": "Write sensitive values to a local temporary file instead of stdout."
+              "description": "Encrypt sensitive values in the browser and write them to a local temporary file during collection."
             },
             {
               "label": "Ranking edits",
@@ -92,8 +92,8 @@
               "description": "Use screenshots to catch layout and typography issues."
             },
             {
-              "label": "Cross-platform browser opening",
-              "description": "Support macOS, Windows, and Linux local browser launch behavior."
+              "label": "Cloud session collection",
+              "description": "Create a public fill URL immediately, then collect answers after the user submits."
             }
           ]
         },
@@ -130,8 +130,8 @@
       "description": "Verify secret handling without leaking values into stdout.",
       "fields": [
         {
-          "id": "local_api_key",
-          "label": "Optional local API key or token",
+          "id": "api_key",
+          "label": "Optional API key or token",
           "type": "text",
           "secret": true,
           "required": false

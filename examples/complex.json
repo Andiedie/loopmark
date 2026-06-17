@@ -1,6 +1,6 @@
 {
   "title": "Loopmark implementation questions",
-  "description": "Questions for a local AI Agent input gate.",
+  "description": "Questions for a cloud AI Agent input handoff.",
   "groups": [
     {
       "id": "product",
@@ -14,7 +14,7 @@
           "multiline": true,
           "format": "markdown",
           "required": true,
-          "default": "A local human-input gate for AI Agents."
+          "default": "A cloud human-input handoff for AI Agents."
         },
         {
           "id": "include_approval",
@@ -37,8 +37,8 @@
           "type": "choice",
           "mode": "multiple",
           "required": true,
-          "default": ["stdin JSON", "Local web UI", "stdout JSON"],
-          "options": ["stdin JSON", "Local web UI", "stdout JSON", "Paper Trail design"]
+          "default": ["stdin JSON", "Cloud fill URL", "collect command"],
+          "options": ["stdin JSON", "Cloud fill URL", "collect command", "Paper Trail design"]
         },
         {
           "id": "priority",
@@ -57,7 +57,7 @@
         },
         {
           "id": "api_key",
-          "label": "Optional API key for local testing",
+          "label": "Optional API key for testing",
           "type": "text",
           "secret": true,
           "required": false

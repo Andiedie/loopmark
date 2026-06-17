@@ -43,6 +43,14 @@ import {
   type SubmittedAnswer
 } from "../shared/answer-state";
 import { fieldErrorsFromSubmitReport, validateSubmitPayload } from "../shared/submission";
+import {
+  assertSessionEnvelope,
+  createAnswerSubmission,
+  decryptSessionEnvelope,
+  deriveSessionId,
+  encryptAnswerEnvelope,
+  extractSessionCodeFromHash
+} from "../shared/cloud-protocol";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
@@ -59,6 +67,11 @@ type RankingItemDraft = ChoiceAnswerItem & {
   key: string;
 };
 type ChoicePanel = "custom" | "details" | null;
+type RemoteSessionState = {
+  sessionId: string;
+  session: NormalizedSession;
+  answerPublicKey: JsonWebKey;
+};
 
 class TextInputSafeKeyboardSensor extends KeyboardSensor {
   static activators = KeyboardSensor.activators.map((activator) => ({
@@ -77,34 +90,37 @@ class TextInputSafeKeyboardSensor extends KeyboardSensor {
 }
 
 export function App() {
-  const token = useMemo(() => getTokenFromPath(window.location.pathname), []);
-  const [session, setSession] = useState<NormalizedSession | null>(null);
+  const sessionCode = useMemo(() => extractSessionCodeFromHash(window.location.hash), []);
+  const [remoteSession, setRemoteSession] = useState<RemoteSessionState | null>(null);
   const [answers, setAnswers] = useState<AnswerState>({});
   const [choiceDrafts, setChoiceDrafts] = useState<ChoiceDraftState>({});
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(
+    sessionCode ? null : "This Loopmark link is missing a valid session code."
+  );
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const session = remoteSession?.session ?? null;
 
   useEffect(() => {
     let alive = true;
 
-    fetch(`/api/session?token=${encodeURIComponent(token)}`)
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error(`Session request failed with ${response.status}.`);
-        }
-        return (await response.json()) as NormalizedSession;
-      })
+    if (!sessionCode) {
+      return () => {
+        alive = false;
+      };
+    }
+
+    loadRemoteSession(sessionCode)
       .then((loadedSession) => {
         if (!alive) {
           return;
         }
 
-        setSession(loadedSession);
-        setAnswers(createInitialAnswers(loadedSession));
-        setChoiceDrafts(createInitialChoiceDrafts(loadedSession));
+        setRemoteSession(loadedSession);
+        setAnswers(createInitialAnswers(loadedSession.session));
+        setChoiceDrafts(createInitialChoiceDrafts(loadedSession.session));
       })
       .catch((error) => {
         if (alive) {
@@ -115,7 +131,7 @@ export function App() {
     return () => {
       alive = false;
     };
-  }, [token]);
+  }, [sessionCode]);
 
   useEffect(() => {
     document.title = session ? `${session.title} - Loopmark` : "Loopmark";
@@ -140,7 +156,7 @@ export function App() {
   }
 
   if (!session) {
-    return <MessageScreen title="Loading Loopmark" message="Preparing the local input page." loading />;
+    return <MessageScreen title="Loading Loopmark" message="Decrypting the input page." loading />;
   }
 
   const percent = progress.required === 0 ? 100 : Math.round((progress.complete / progress.required) * 100);
@@ -207,10 +223,22 @@ export function App() {
 
     setSubmitting(true);
     try {
-      const response = await fetch(`/api/submit?token=${encodeURIComponent(token)}`, {
+      if (!remoteSession || !sessionCode) {
+        throw new Error("Loopmark session is not ready.");
+      }
+      const envelope = await encryptAnswerEnvelope({
+        sessionId: remoteSession.sessionId,
+        answerPublicKey: remoteSession.answerPublicKey,
+        payload: { answers }
+      });
+      const submission = await createAnswerSubmission({
+        sessionCode,
+        envelope
+      });
+      const response = await fetch(`/api/sessions/${encodeURIComponent(remoteSession.sessionId)}/answer`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ answers })
+        body: JSON.stringify(submission)
       });
 
       if (!response.ok) {
@@ -230,7 +258,7 @@ export function App() {
     return (
       <MessageScreen
         title="Inputs submitted"
-        message="You can return to the agent. Loopmark has written the final JSON to stdout."
+        message="You can return to the agent and say that the Loopmark form is submitted."
       />
     );
   }
@@ -290,7 +318,7 @@ export function App() {
                 ))}
               </nav>
               <div className="border-t border-paper-line pt-5 text-xs leading-5 text-paper-muted">
-                Answers stay local. Secrets use temporary files.
+                Answers are end-to-end encrypted before upload.
               </div>
             </div>
           </aside>
@@ -532,9 +560,9 @@ function SecretHint() {
   return (
     <span className="group relative inline-flex h-5 items-center text-paper-muted">
       <Lock aria-hidden className="size-4" />
-      <span className="sr-only">Secret answer is written to a local temporary file.</span>
+      <span className="sr-only">Secret answer is encrypted before upload.</span>
       <span className="pointer-events-none absolute left-1/2 top-7 z-30 hidden w-56 -translate-x-1/2 border border-paper-line bg-white px-3 py-2 text-xs leading-5 text-paper-muted shadow-sm group-hover:block group-focus-within:block">
-        Secret answer is written to a temporary file and omitted from stdout.
+        Secret answer is encrypted here and later written to a local file by the agent.
       </span>
     </span>
   );
@@ -1262,6 +1290,27 @@ function validateAnswers(session: NormalizedSession, answers: AnswerState): Fiel
   return result.ok ? {} : fieldErrorsFromSubmitReport(result.report);
 }
 
+async function loadRemoteSession(sessionCode: string): Promise<RemoteSessionState> {
+  const sessionId = await deriveSessionId(sessionCode);
+  const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`);
+  if (!response.ok) {
+    throw new Error(`Session request failed with ${response.status}.`);
+  }
+
+  const envelope = (await response.json()) as unknown;
+  assertSessionEnvelope(envelope);
+  if (envelope.sessionId !== sessionId) {
+    throw new Error("Loopmark session envelope does not match the link.");
+  }
+
+  const plaintext = await decryptSessionEnvelope(sessionCode, envelope);
+  return {
+    sessionId,
+    session: plaintext.session,
+    answerPublicKey: plaintext.answerPublicKey
+  };
+}
+
 function flattenGroups(groups: NormalizedGroup[]): NormalizedField[] {
   return groups.flatMap((group) => group.fields);
 }
@@ -1283,11 +1332,6 @@ function groupProgress(group: NormalizedGroup, answers: AnswerState): string {
   const required = group.fields.filter((field) => field.required);
   const complete = required.filter((field) => isAnswerComplete(field, answers[field.id])).length;
   return `${complete} / ${required.length}`;
-}
-
-function getTokenFromPath(pathname: string): string {
-  const parts = pathname.split("/").filter(Boolean);
-  return parts[parts.length - 1] ?? "";
 }
 
 function isTextEditingTarget(target: EventTarget | null): boolean {

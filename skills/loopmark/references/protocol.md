@@ -2,11 +2,12 @@
 
 ## CLI Contract
 
-Loopmark reads one JSON session object from stdin, starts a temporary local web page, waits for the human to submit answers, and writes the final answer JSON to stdout.
+Loopmark has two commands:
 
-Use stderr for URLs, logs, and validation errors. Do not parse stderr as the final result unless the command exits non-zero.
+1. Create a cloud session from JSON on stdin.
+2. Collect the encrypted answer later with the local receipt file.
 
-Common commands:
+Create:
 
 ```bash
 npx @andie/loopmark < /path/to/questions.json
@@ -15,7 +16,58 @@ pnpx @andie/loopmark < /path/to/questions.json
 
 If `loopmark` is already on PATH, `loopmark < /path/to/questions.json` is also valid.
 
-Loopmark opens the browser by default. Use `--no-open` or `LOOPMARK_NO_OPEN=1` only in headless or remote environments where opening a local browser is impossible; then share the URL from stderr with the human.
+Create stdout:
+
+```json
+{
+  "status": "created",
+  "fillUrl": "https://loopmark.ssoo.fun/s#lm1_...",
+  "receiptFile": "/tmp/loopmark-receipts/s_xxx.receipt.json",
+  "sessionId": "s_xxx"
+}
+```
+
+Create stderr may repeat the URL and receipt path for human readability. Do not parse stderr as the machine-readable result unless the command exits non-zero with a validation report.
+
+Collect:
+
+```bash
+npx @andie/loopmark collect /tmp/loopmark-receipts/s_xxx.receipt.json
+```
+
+Collect stdout is either:
+
+```json
+{
+  "status": "pending",
+  "message": "Loopmark session has not been submitted yet."
+}
+```
+
+or:
+
+```json
+{
+  "status": "submitted",
+  "answers": {}
+}
+```
+
+Do not poll. Run `collect` after the human explicitly says the form is submitted. If `collect` returns `pending`, tell the human it is still pending and wait again.
+
+Use a custom deployment with:
+
+```bash
+npx @andie/loopmark --base-url https://your-loopmark.example < /path/to/questions.json
+```
+
+or set `LOOPMARK_BASE_URL`.
+
+## Security Model
+
+The public fill URL contains only a session code in the URL hash. The local receipt file contains the answer decryption key. Do not share receipt files in chat, logs, commits, or issue comments.
+
+The Worker and R2 only store encrypted JSON envelopes. Browser submissions include a session-code-derived proof, so knowing a `sessionId` alone is not enough to submit an answer. Secret answers are encrypted in the browser, decrypted during `collect`, written to a local temporary file, and omitted from stdout.
 
 ## Session Object
 
@@ -69,7 +121,7 @@ Supported text keys:
 - `multiline`: render a textarea.
 - `format`: `plain`, `markdown`, or `code`.
 - `default`: string only.
-- `secret`: write the submitted value to a local temporary file instead of stdout.
+- `secret`: write the submitted value to a local temporary file during collection instead of stdout.
 
 Do not set `default` on secret fields.
 
@@ -119,23 +171,16 @@ Supported choice keys:
 
 For `ranking` fields with no explicit default, Loopmark initially ranks all options in the provided order.
 
-## Output Shape
+## Submitted Output Shape
 
-Successful stdout:
+Text answers are strings or `null`:
 
 ```json
 {
-  "status": "submitted",
-  "answers": {
-    "context": {
-      "question": "What context should I preserve?",
-      "answer": "Keep the implementation small."
-    }
-  }
+  "question": "What context should I preserve?",
+  "answer": "Keep the implementation small."
 }
 ```
-
-Text answers are strings or `null`.
 
 Single choice answers are one object or `null`:
 
@@ -158,7 +203,7 @@ Secret answers return a file pointer, not the secret value:
   "question": "Optional API token",
   "answer": {
     "secretFile": "/tmp/loopmark-secrets/001_api_token.txt",
-    "description": "Secret value was written to a local temporary file and omitted from answers."
+    "description": "Secret value was written to a local temporary file during collection and omitted from answers."
   }
 }
 ```

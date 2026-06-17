@@ -12,7 +12,7 @@ import {
 export type { ChoiceAnswerItem, SubmitPayload, SubmittedAnswer };
 
 export const SECRET_DESCRIPTION =
-  "Secret value was written to a local temporary file and omitted from answers.";
+  "Secret value was written to a local temporary file during collection and omitted from answers.";
 
 export type FinalAnswer =
   | { question: string; answer: string | null }

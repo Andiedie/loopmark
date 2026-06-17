@@ -1,6 +1,6 @@
 # Loopmark Design
 
-Loopmark is a local human-input gate for AI Agents. It reads a compact JSON question session, opens a temporary local page, and returns dense human feedback to the calling agent. The interface is not a form builder, dashboard, survey SaaS, or approval system. It is a quiet, well-set document where a human can review, edit, rank, and submit answers with confidence.
+Loopmark is a cloud human-input handoff for AI Agents. It reads a compact JSON question session, opens a public encrypted fill page, and lets the calling agent collect dense human feedback later. The interface is not a form builder, dashboard, survey SaaS, or approval system. It is a quiet, well-set document where a human can review, edit, rank, and submit answers with confidence.
 
 ## 1. Design Goal
 
@@ -13,7 +13,7 @@ Design priorities:
 - Preserve enough context that the user knows what the agent is asking and why.
 - Avoid dashboard aesthetics, KPI blocks, heavy cards, bright gradients, and decorative UI.
 - Treat defaults as agent suggestions that the user can edit, not as final truth.
-- Protect sensitive answers by making local secret-file behavior visible without exposing secret content.
+- Protect sensitive answers by making encrypted transport and local collection-file behavior visible without exposing secret content.
 
 ## 2. Principles
 
@@ -63,7 +63,7 @@ Rules:
 Core path:
 
 ```text
-Agent asks -> human reviews defaults -> human edits answers -> validation points to first issue -> submit -> agent receives JSON
+Agent creates encrypted session -> human reviews defaults -> human edits answers -> validation points to first issue -> submit -> agent collects JSON
 ```
 
 ## 4. Layout
@@ -103,7 +103,7 @@ Agent asks -> human reviews defaults -> human edits answers -> validation points
 
 ## 5. Visual Style
 
-Keywords: paper, editorial, calm, precise, restrained, local, trustworthy.
+Keywords: paper, editorial, calm, precise, restrained, encrypted, trustworthy.
 
 Rules:
 
@@ -283,7 +283,7 @@ Groups can collapse to reduce complexity. Collapsed headers still show required 
 
 ### Secret Fields
 
-Secret fields render as password/text areas as appropriate. A lock icon explains that secret content is saved to a local temporary file and omitted from stdout. The final JSON references only `secretFile` and `description`.
+Secret fields render as password/text areas as appropriate. A lock icon explains that secret content is encrypted before upload, written to a local temporary file during collection, and omitted from stdout. The final JSON references only `secretFile` and `description`.
 
 ## 9. State Design
 
@@ -390,7 +390,7 @@ Before shipping a UI change:
 
 ## 17. Reference Direction
 
-The accepted visual direction is "Paper Trail": a publication-like local questionnaire with a thin top bar, a light outline, chapter headings, numbered questions, broad answer controls, restrained green selection states, and marginal agent notes.
+The accepted visual direction is "Paper Trail": a publication-like encrypted questionnaire with a thin top bar, a light outline, chapter headings, numbered questions, broad answer controls, restrained green selection states, and marginal agent notes.
 
 Do not commit local absolute paths to generated concept images. The repository source of truth is this document plus checked-in examples and tests. Temporary screenshots used during review should stay outside the repo.
 

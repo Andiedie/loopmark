@@ -1,13 +1,14 @@
 {
   "name": "@andie/loopmark",
   "version": "0.0.4",
-  "description": "Local human input gate for AI agents.",
+  "description": "Cloud human input handoff for AI agents.",
   "keywords": [
     "ai",
     "agent",
     "human-in-the-loop",
     "cli",
-    "local-first",
+    "cloudflare",
+    "e2ee",
     "feedback"
   ],
   "homepage": "https://github.com/Andiedie/loopmark#readme",
@@ -40,6 +41,9 @@
     "build": "pnpm build:web && pnpm build:cli",
     "build:web": "vite build",
     "build:cli": "tsup",
+    "deploy:cloudflare": "pnpm build:web && wrangler deploy",
+    "dev:cloudflare": "pnpm build:web && wrangler dev",
+    "check:cloudflare": "pnpm build:web && wrangler deploy --dry-run",
     "lint": "eslint . --max-warnings=0",
     "test": "vitest run --coverage",
     "test:watch": "vitest",
@@ -60,6 +64,7 @@
     "zod": "^4.2.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260616.1",
     "@eslint/js": "^9.39.2",
     "@playwright/test": "^1.57.0",
     "@testing-library/jest-dom": "^6.9.1",
@@ -83,7 +88,8 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.50.0",
     "vite": "^7.2.7",
-    "vitest": "^4.0.15"
+    "vitest": "^4.0.15",
+    "wrangler": "^4.100.0"
   },
   "packageManager": "pnpm@11.5.2"
 }

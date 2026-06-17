@@ -32,13 +32,15 @@ describe("bundled Loopmark skill", () => {
     expect(skill).toContain("references/protocol.md");
   });
 
-  it("keeps a strict human-input boundary and opens the browser by default", () => {
+  it("keeps a strict human-input boundary and avoids polling", () => {
     const skill = readFixture("../skills/loopmark/SKILL.md");
 
     expect(skill).toContain("Do not ask the human for information you can reasonably discover");
     expect(skill).toContain("real human decision");
     expect(skill).toContain("npx @andie/loopmark < /path/to/questions.json");
     expect(skill).toContain("pnpx @andie/loopmark < /path/to/questions.json");
+    expect(skill).toContain("npx @andie/loopmark collect /path/to/s_xxx.receipt.json");
+    expect(skill).toContain("Do not poll");
     expect(skill).not.toContain("--no-open");
   });
 
@@ -58,11 +60,10 @@ describe("bundled Loopmark skill", () => {
 
     expect(readme).toContain("How It Works");
     expect(readme).toContain("Privacy And Secrets");
+    expect(readme).toContain("Self-Hosting On Cloudflare");
+    expect(readme).toContain("CLOUDFLARE_ACCOUNT_ID");
     expect(readme).not.toContain("## Development");
-    expect(readme).not.toContain("## Test");
     expect(readme).not.toContain("## Release");
-    expect(readme).not.toContain("pnpm install");
-    expect(readme).not.toContain("pnpm build");
   });
 
   it("publishes the skill directory with the npm package", () => {
