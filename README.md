@@ -25,11 +25,11 @@ After the skill is installed, your agent learns:
 - when it should ask you instead of guessing;
 - when it should keep investigating without bothering you;
 - how to create a small structured question session;
-- how to run `@andie/loopmark` on demand with `npx`, `pnpx`, or the package runner available in your environment.
+- how to run `@andie/loopmark` on demand with `npx`.
 
 When the agent needs your input, it runs Loopmark once with a JSON session on stdin. The CLI encrypts the session, posts it to the Loopmark Worker, writes a local receipt file, prints a public fill URL, and exits immediately.
 
-You open the URL, answer in the browser, and tell the agent when you are done. The agent then runs `loopmark collect <receipt-file>` to fetch and decrypt the answer.
+You open the URL, answer in the browser, and tell the agent when you are done. The agent then runs `loopmark collect <receipt-file>` to fetch and decrypt the answer. The agent should not poll while waiting for you.
 
 ```bash
 npx @andie/loopmark < questions.json
@@ -81,7 +81,7 @@ Cloudflare resources:
 - Workers: hosts the API and static fill page.
 - R2: stores encrypted session and answer envelopes under `sessions/{sessionId}/session.json` and `sessions/{sessionId}/answer.json`.
 - R2 lifecycle: delete objects under `sessions/` after your desired retention window.
-- Custom domain: bind your domain to the Worker manually in the Cloudflare dashboard.
+- Custom domain: bind your domain to the Worker manually in the Cloudflare dashboard. Keep the R2 bucket private; Loopmark does not need an R2 public or custom domain.
 
 Recommended bucket name:
 
@@ -94,11 +94,13 @@ If you choose another bucket name, update `wrangler.jsonc`.
 GitHub Actions secrets for the included deploy workflow:
 
 - `CLOUDFLARE_ACCOUNT_ID`: Cloudflare account ID.
-- `CLOUDFLARE_API_TOKEN`: Cloudflare API token with account-scoped Workers Scripts edit and Workers R2 Storage edit permissions.
+- `CLOUDFLARE_API_TOKEN`: Cloudflare API token with account-scoped Workers Scripts edit and Workers R2 Storage read permissions.
 
-GitHub Actions variables:
+Use a custom API token from Cloudflare profile API Tokens, not an R2 object API token, because the workflow deploys a Worker. Scope it to the one Cloudflare account that owns the Worker and R2 bucket. R2 edit, zone, and DNS permissions are not needed when the R2 bucket, lifecycle, and custom domain are managed manually.
 
-- `LOOPMARK_BASE_URL`: optional, used as the production environment URL in GitHub Actions.
+GitHub Actions variable, either repository-level or on the `production` environment:
+
+- `LOOPMARK_BASE_URL`: optional public URL for the deployment, for example `https://loopmark.ssoo.fun`. The workflow uses it only as the GitHub environment URL; it does not configure Cloudflare routing.
 
 Manual Cloudflare dashboard setup:
 

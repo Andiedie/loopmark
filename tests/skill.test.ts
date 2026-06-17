@@ -53,6 +53,7 @@ describe("bundled Loopmark skill", () => {
     expect(readme).toContain("npx skills add andiedie/loopmark");
     expect(readme).toContain("You do not need to install Loopmark globally");
     expect(readme).not.toContain("skills experimental_sync");
+    expect(readme).not.toContain("pnpx");
     expect(readme).not.toContain("pnpm add -D @andie/loopmark");
     expect(readme).not.toContain("npm install -g @andie/loopmark");
     expect(readme).not.toContain("--agent codex");
@@ -87,5 +88,10 @@ describe("bundled Loopmark skill", () => {
     expect(readme).toContain("Self-Hosting On Cloudflare");
     expect(readme).toContain("CLOUDFLARE_ACCOUNT_ID");
     expect(readme).toContain("CLOUDFLARE_API_TOKEN");
+    expect(readme).toContain("Workers R2 Storage read permissions");
+    expect(readme).toContain("R2 edit, zone, and DNS permissions are not needed");
+    expect(readme).toContain("not an R2 object API token");
+    expect(readme).toContain("Keep the R2 bucket private");
+    expect(readme).toContain("The workflow uses it only as the GitHub environment URL");
   });
 });
