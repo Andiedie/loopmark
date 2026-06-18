@@ -355,7 +355,7 @@ describe("Loopmark UI", () => {
     expect(screen.getByRole("button", { name: "Copy install command" })).toBeInTheDocument();
     expect(screen.getAllByText(/copy traceable Markdown/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/encrypted secret bundle/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/local \.env file/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/local \.env file/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Private deployments are supported/i)).toBeInTheDocument();
     expect(screen.queryByText("Self-hosted service")).not.toBeInTheDocument();
     expect(screen.queryByText(/The default hosted service is this site/i)).not.toBeInTheDocument();
@@ -373,6 +373,55 @@ describe("Loopmark UI", () => {
 
     expect(await screen.findByRole("link", { name: "Loopmark" })).toHaveAttribute("href", "/");
     expect(screen.queryByRole("link", { name: "LoopmarkLoopmark" })).not.toBeInTheDocument();
+  });
+
+  it("lets visitors explore the handoff flow and secret path", async () => {
+    window.history.pushState({}, "", "/");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Watch one handoff from Agent to User." })).toBeInTheDocument();
+    expect(screen.getByLabelText("Loopmark handoff movie")).toBeInTheDocument();
+    expect(screen.getByLabelText("Loopmark relay")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /01\s*Prepare question/i })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getAllByText("questions.json").length).toBeGreaterThan(0);
+    expect(screen.getByText(/"title": "Need product direction"/i)).toBeInTheDocument();
+    expect(screen.getByText(/"label": "Which direction should I take\?"/i)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /02\s*Loopmark form/i }));
+    expect(screen.getByLabelText("Loopmark form preview")).toBeInTheDocument();
+    expect(screen.getByText("Which direction should I take?")).toBeInTheDocument();
+    expect(screen.getByText("Smallest viable change")).toBeInTheDocument();
+    expect(screen.getByText("Broader cleanup")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /03\s*Answer/i }));
+    expect(screen.getByText("Ship the smallest reliable path today.")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /04\s*Resume/i }));
+    expect(screen.getByText(/# Need product direction Answers/)).toBeInTheDocument();
+    expect(screen.getByText(/> Smallest viable change/)).toBeInTheDocument();
+    expect(screen.queryByText(/npx --yes @andie\/loopmark secrets s_xxx/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Secret handling lane")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("switch", { name: /Show secret handling/i }));
+    expect(screen.getByLabelText("Secret handling lane")).toBeInTheDocument();
+    expect(screen.getByText("Secret field")).toBeInTheDocument();
+    expect(screen.getByText("Encrypted bundle")).toBeInTheDocument();
+    expect(screen.getByText(".env file")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /01\s*Prepare question/i }));
+    expect(screen.getByText(/"id": "api_token"/i)).toBeInTheDocument();
+    expect(screen.getByText(/"secret": true/i)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /02\s*Loopmark form/i }));
+    expect(screen.getByText("Optional API token")).toBeInTheDocument();
+    expect(screen.getByText("This value is omitted from Markdown.")).toBeInTheDocument();
+    expect(screen.queryByText("secret value")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /04\s*Resume/i }));
+    expect(screen.getByText(/Answer: _Secret omitted from Markdown\._/)).toBeInTheDocument();
+    expect(screen.getByText(/npx --yes @andie\/loopmark secrets s_xxx/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Loopmark server/i })).not.toBeInTheDocument();
   });
 
   it("shows the public homepage when refreshing a root anchor", async () => {
