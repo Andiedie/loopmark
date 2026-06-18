@@ -254,6 +254,26 @@ describe("input schema normalization", () => {
     ).toThrow(LoopmarkInputError);
   });
 
+  it("rejects secret field ids that collide as env keys", () => {
+    expect.assertions(2);
+
+    try {
+      normalizeSession({
+        title: "Need input",
+        fields: [
+          { id: "api-key", label: "API key", type: "text", secret: true },
+          { id: "api_key", label: "API key again", type: "text", secret: true }
+        ]
+      });
+    } catch (error) {
+      expect(error).toBeInstanceOf(LoopmarkInputError);
+      expect((error as LoopmarkInputError).report.errors[0]).toMatchObject({
+        path: "fields[1].id",
+        code: "duplicate_secret_env_key"
+      });
+    }
+  });
+
   it("rejects duplicate group ids because UI anchors and collapsed state use them", () => {
     expect.assertions(2);
 

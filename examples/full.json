@@ -72,7 +72,7 @@
             },
             {
               "label": "Secret file output",
-              "description": "Encrypt sensitive values in the browser and write them to a local temporary file during collection."
+              "description": "Encrypt sensitive values in the browser and download them to a local temporary file with the secrets command."
             },
             {
               "label": "Ranking controls",
@@ -83,8 +83,8 @@
               "description": "Use screenshots to catch layout and typography issues."
             },
             {
-              "label": "Cloud session collection",
-              "description": "Create a public fill URL immediately, then collect answers after the user submits."
+              "label": "Traceable Markdown answer",
+              "description": "Create a public fill URL immediately, then have the user paste readable Markdown back into chat."
             }
           ]
         },
@@ -123,8 +123,8 @@
           "secret": true
         },
         {
-          "id": "private_note",
-          "label": "Private note for the agent",
+          "id": "service_account_key",
+          "label": "Optional service account key",
           "type": "text",
           "secret": true,
           "multiline": true

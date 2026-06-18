@@ -47,7 +47,8 @@ try {
       [
         "",
         "The local Loopmark server is still running for this try session.",
-        "Open the printed Loopmark URL, submit the form, then collect the printed receipt in another terminal.",
+        "Open the printed Loopmark URL, copy answers, then paste the Markdown back to the agent.",
+        "If the Markdown says secrets were omitted, run its Loopmark secrets command on this machine.",
         "Press Ctrl+C here when you are done."
       ].join("\n")
     );

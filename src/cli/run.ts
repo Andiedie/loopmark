@@ -1,10 +1,11 @@
 import type { Readable, Writable } from "node:stream";
 import { parseInputJson, type NormalizedSession } from "../shared/schema";
 import { LoopmarkInputError } from "../shared/errors";
+import { assertSessionId } from "../shared/cloud-protocol";
 import {
-  collectRemoteResult,
   createRemoteSession,
-  type RemoteCollectResult,
+  downloadRemoteSecrets,
+  type RemoteSecretsResult,
   type RemoteCreateResult
 } from "./remote";
 
@@ -22,16 +23,16 @@ export type CliDependencies = {
     session: NormalizedSession,
     options: { baseUrl?: string; receiptDir?: string }
   ) => Promise<RemoteCreateResult>;
-  collectRemoteResult: (
-    receiptFile: string,
-    options: { secretDir?: string }
-  ) => Promise<RemoteCollectResult>;
+  downloadRemoteSecrets: (
+    sessionId: string,
+    options: { receiptFile?: string; receiptDir?: string; secretDir?: string }
+  ) => Promise<RemoteSecretsResult>;
 };
 
 const defaultDependencies: CliDependencies = {
   parseInputJson,
   createRemoteSession,
-  collectRemoteResult
+  downloadRemoteSecrets
 };
 
 export async function runCli(
@@ -46,21 +47,21 @@ export async function runCli(
         [
           "Usage:",
           "  loopmark [--base-url URL] [--receipt-dir DIR] < questions.json",
-          "  loopmark collect <receipt-file> [--secret-dir DIR]",
+          "  loopmark secrets <session-id> [--receipt FILE] [--receipt-dir DIR] [--secret-dir DIR]",
           ""
         ].join("\n")
       );
       return 0;
     }
 
-    if (parsedArgs.command === "collect") {
-      const output = await dependencies.collectRemoteResult(parsedArgs.receiptFile, {
+    if (parsedArgs.command === "secrets") {
+      const output = await dependencies.downloadRemoteSecrets(parsedArgs.sessionId, {
+        receiptFile: parsedArgs.receiptFile,
+        receiptDir: parsedArgs.receiptDir ?? runtime.env.LOOPMARK_RECEIPT_DIR,
         secretDir: parsedArgs.secretDir ?? runtime.env.LOOPMARK_SECRET_DIR
       });
+      runtime.stderr.write(`Loopmark secrets: ${output.secretFile}\n`);
       runtime.stdout.write(`${JSON.stringify(output)}\n`);
-      if (output.status === "pending") {
-        runtime.stderr.write(`${output.message}\n`);
-      }
       return 0;
     }
 
@@ -98,8 +99,10 @@ type ParsedArgs =
     }
   | {
       help: false;
-      command: "collect";
-      receiptFile: string;
+      command: "secrets";
+      sessionId: string;
+      receiptFile?: string;
+      receiptDir?: string;
       secretDir?: string;
     };
 
@@ -108,16 +111,18 @@ function parseArgs(args: string[]): ParsedArgs {
     return { help: true };
   }
 
-  if (args[0] === "collect") {
-    const values = parseOptions(args.slice(1), new Set(["secret-dir"]));
-    const receiptFile = values.positionals[0];
-    if (!receiptFile || values.positionals.length > 1) {
-      throw new Error("Usage: loopmark collect <receipt-file> [--secret-dir DIR]");
+  if (args[0] === "secrets") {
+    const values = parseOptions(args.slice(1), new Set(["receipt", "receipt-dir", "secret-dir"]));
+    const sessionId = values.positionals[0];
+    if (!sessionId || values.positionals.length > 1) {
+      throw new Error("Usage: loopmark secrets <session-id> [--receipt FILE] [--receipt-dir DIR] [--secret-dir DIR]");
     }
     return {
       help: false,
-      command: "collect",
-      receiptFile,
+      command: "secrets",
+      sessionId: assertSessionId(sessionId),
+      receiptFile: values.options.get("receipt"),
+      receiptDir: values.options.get("receipt-dir"),
       secretDir: values.options.get("secret-dir")
     };
   }

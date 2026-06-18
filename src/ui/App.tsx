@@ -23,6 +23,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Clipboard,
   FileKey2,
   GripVertical,
   Loader2,
@@ -34,6 +35,7 @@ import {
 import type { NormalizedChoiceField, NormalizedField, NormalizedGroup, NormalizedSession } from "../shared/schema";
 import {
   getInitialAnswer,
+  isSecretValuePresent,
   isAnswerPresent,
   normalizeChoiceItems,
   normalizeTextAnswer,
@@ -42,13 +44,16 @@ import {
   type SubmittedAnswer
 } from "../shared/answer-state";
 import { fieldErrorsFromSubmitReport, validateSubmitPayload } from "../shared/submission";
+import { createAnswerMarkdown } from "../shared/answer-markdown";
 import {
   assertSessionEnvelope,
-  createAnswerSubmission,
+  createSecretBundleSubmission,
   decryptSessionEnvelope,
   deriveSessionId,
-  encryptAnswerEnvelope,
-  extractSessionCodeFromHash
+  encryptSecretBundleEnvelope,
+  extractSessionCodeFromHash,
+  type SecretBundle,
+  type SecretBundleSubmission
 } from "../shared/cloud-protocol";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -65,6 +70,12 @@ type RemoteSessionState = {
   session: NormalizedSession;
   answerPublicKey: JsonWebKey;
 };
+type AnswerExportState =
+  | { status: "editing" }
+  | { status: "copying" }
+  | { status: "copied" }
+  | { status: "manual"; markdown: string; error: string; copying: boolean }
+  | { status: "error"; message: string };
 
 class TextInputSafeKeyboardSensor extends KeyboardSensor {
   static activators = KeyboardSensor.activators.map((activator) => ({
@@ -92,8 +103,7 @@ export function App() {
   const [loadError, setLoadError] = useState<string | null>(
     sessionCode ? null : "This Loopmark link is missing a valid session code."
   );
-  const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [answerExport, setAnswerExport] = useState<AnswerExportState>({ status: "editing" });
   const session = remoteSession?.session ?? null;
 
   useEffect(() => {
@@ -191,7 +201,7 @@ export function App() {
     window.setTimeout(() => jumpToField(fieldId), 0);
   }
 
-  async function submit() {
+  async function copyAnswers() {
     if (!session) {
       return;
     }
@@ -205,46 +215,83 @@ export function App() {
       return;
     }
 
-    setSubmitting(true);
+    setAnswerExport({ status: "copying" });
+    let markdown: string | null = null;
     try {
-      if (!remoteSession || !sessionCode) {
-        throw new Error("Loopmark session is not ready.");
-      }
-      const envelope = await encryptAnswerEnvelope({
-        sessionId: remoteSession.sessionId,
-        answerPublicKey: remoteSession.answerPublicKey,
-        payload: { answers }
-      });
-      const submission = await createAnswerSubmission({
-        sessionCode,
-        envelope
-      });
-      const response = await fetch(`/api/sessions/${encodeURIComponent(remoteSession.sessionId)}/answer`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(submission)
-      });
-
-      if (!response.ok) {
-        const body = await response.text();
-        throw new Error(body || `Submit failed with ${response.status}.`);
-      }
-
-      setSubmitted(true);
+      markdown = await buildAnswerMarkdown();
+      await writeClipboardText(markdown);
+      setAnswerExport({ status: "copied" });
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "Unable to submit answers.");
-    } finally {
-      setSubmitting(false);
+      const message = errorMessage(error, "Unable to copy answers.");
+      setAnswerExport(markdown ? { status: "manual", markdown, error: message, copying: false } : { status: "error", message });
     }
   }
 
-  if (submitted) {
+  async function buildAnswerMarkdown(): Promise<string> {
+    if (!remoteSession || !session || !sessionCode) {
+      throw new Error("Loopmark session is not ready.");
+    }
+
+    const secretBundle = collectSecretBundle(session, answers);
+
+    if (secretBundle) {
+      const envelope = await encryptSecretBundleEnvelope({
+        sessionId: remoteSession.sessionId,
+        answerPublicKey: remoteSession.answerPublicKey,
+        bundle: secretBundle
+      });
+      const submission = await createSecretBundleSubmission({
+        sessionCode,
+        sessionId: remoteSession.sessionId,
+        envelope
+      });
+      await uploadSecretBundle(remoteSession.sessionId, submission);
+    }
+
+    return createAnswerMarkdown({
+      sessionId: remoteSession.sessionId,
+      session,
+      payload: { answers }
+    });
+  }
+
+  async function copyPreparedMarkdown(markdown: string, previousError: string) {
+    setAnswerExport({ status: "manual", markdown, error: previousError, copying: true });
+    try {
+      await writeClipboardText(markdown);
+      setAnswerExport({ status: "copied" });
+    } catch (error) {
+      setAnswerExport({
+        status: "manual",
+        markdown,
+        error: errorMessage(error, "Unable to copy answers."),
+        copying: false
+      });
+    }
+  }
+
+  if (answerExport.status === "copied") {
     return (
       <MessageScreen
-        title="Inputs submitted"
-        message="You can return to the agent and say that the Loopmark form is submitted."
+        title="Answers copied"
+        message="Paste the copied Markdown back to the agent."
       />
     );
+  }
+
+  if (answerExport.status === "manual") {
+    return (
+      <AnswerMarkdownScreen
+        markdown={answerExport.markdown}
+        error={answerExport.error}
+        copying={answerExport.copying}
+        onCopy={() => copyPreparedMarkdown(answerExport.markdown, answerExport.error)}
+      />
+    );
+  }
+
+  if (answerExport.status === "error") {
+    return <MessageScreen title="Unable to prepare answers" message={answerExport.message} />;
   }
 
   return (
@@ -302,7 +349,7 @@ export function App() {
                 ))}
               </nav>
               <div className="border-t border-paper-line pt-5 text-xs leading-5 text-paper-muted">
-                Answers are end-to-end encrypted before upload.
+                Secret answers are encrypted before copy.
               </div>
             </div>
           </aside>
@@ -394,8 +441,8 @@ export function App() {
 
           <ActionBar
             hasErrors={hasFieldErrors}
-            submitting={submitting}
-            onSubmit={submit}
+            copying={answerExport.status === "copying"}
+            onCopy={copyAnswers}
           />
         </section>
       </div>
@@ -405,20 +452,20 @@ export function App() {
 
 function ActionBar(input: {
   hasErrors: boolean;
-  submitting: boolean;
-  onSubmit: () => void;
+  copying: boolean;
+  onCopy: () => void;
 }) {
-  const { hasErrors, submitting, onSubmit } = input;
+  const { hasErrors, copying, onCopy } = input;
 
   return (
     <div className="mt-8 flex flex-col gap-4 border-t border-paper-line py-6 md:flex-row md:items-center md:justify-between">
       <p className="max-w-xl text-sm leading-6 text-paper-muted">
-        {hasErrors ? "Fix the highlighted questions before continuing." : "Review your answers, then submit them back to the agent."}
+        {hasErrors ? "Fix the highlighted questions before continuing." : "Review your answers, then copy the Markdown back to the agent."}
       </p>
       <div className="flex flex-wrap gap-3">
-        <Button type="button" variant="primary" onClick={onSubmit} disabled={submitting}>
-          {submitting ? <Loader2 aria-hidden className="animate-spin" /> : null}
-          Submit inputs
+        <Button type="button" variant="primary" onClick={onCopy} disabled={copying}>
+          {copying ? <Loader2 aria-hidden className="animate-spin" /> : <Clipboard aria-hidden />}
+          Copy answers
         </Button>
       </div>
     </div>
@@ -535,9 +582,9 @@ function SecretHint() {
   return (
     <span className="group relative inline-flex h-5 items-center text-paper-muted">
       <Lock aria-hidden className="size-4" />
-      <span className="sr-only">Secret answer is encrypted before upload.</span>
+      <span className="sr-only">Secret answer is encrypted before copy.</span>
       <span className="pointer-events-none absolute left-1/2 top-7 z-30 hidden w-56 -translate-x-1/2 border border-paper-line bg-white px-3 py-2 text-xs leading-5 text-paper-muted shadow-sm group-hover:block group-focus-within:block">
-        Secret answer is encrypted here and later written to a local file by the agent.
+        Secret value is omitted from Markdown and later written to a local file by the agent.
       </span>
     </span>
   );
@@ -552,9 +599,23 @@ function TextField(input: {
 }) {
   const { field, answer, invalid, describedBy, onChange } = input;
   const value = answer?.type === (field.secret ? "secret" : "text") ? answer.value ?? "" : "";
-  const update = (nextValue: string) => onChange({ type: field.secret ? "secret" : "text", value: nextValue });
+  const note = answer?.type === "secret" ? answer.note ?? "" : "";
+  const update = (nextValue: string) => {
+    onChange({
+      type: field.secret ? "secret" : "text",
+      value: nextValue,
+      ...(field.secret && note !== "" ? { note } : {})
+    });
+  };
+  const updateNote = (nextNote: string) => {
+    onChange({
+      type: "secret",
+      value,
+      ...(nextNote !== "" ? { note: nextNote } : {})
+    });
+  };
 
-  if (!field.secret || field.multiline) {
+  if (!field.secret) {
     return (
       <Textarea
         id={field.id}
@@ -567,15 +628,57 @@ function TextField(input: {
     );
   }
 
-  return (
+  const answerInput = field.multiline ? (
+    <Textarea
+      id={field.id}
+      value={value}
+      aria-invalid={invalid}
+      aria-describedby={describedBy}
+      rows={5}
+      onChange={(event) => update(event.target.value)}
+    />
+  ) : (
     <Input
       id={field.id}
-      type={field.secret ? "password" : "text"}
+      type="password"
       value={value}
       aria-invalid={invalid}
       aria-describedby={describedBy}
       onChange={(event) => update(event.target.value)}
     />
+  );
+
+  return (
+    <div className="flex flex-col gap-4">
+      {answerInput}
+      <TextNote field={field} value={note} onChange={updateNote} />
+    </div>
+  );
+}
+
+function TextNote(input: {
+  field: Extract<NormalizedField, { type: "text" }>;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const { field, value, onChange } = input;
+  const id = `${field.id}-note`;
+
+  return (
+    <div className="max-w-3xl">
+      <label htmlFor={id} className="text-xs font-semibold uppercase tracking-[0.14em] text-paper-muted">
+        Note
+      </label>
+      <Textarea
+        id={id}
+        aria-label={`Note for ${field.label}`}
+        placeholder="Why this answer, or why you skipped it"
+        rows={3}
+        className="mt-2 min-h-20 resize-y py-2 leading-5"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </div>
   );
 }
 
@@ -917,6 +1020,61 @@ function MessageScreen(input: { title: string; message: string; loading?: boolea
   );
 }
 
+function AnswerMarkdownScreen(input: {
+  markdown: string;
+  error: string;
+  copying: boolean;
+  onCopy: () => void;
+}) {
+  const { markdown, error, copying, onCopy } = input;
+
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-paper-50 px-5 py-10 text-paper-ink">
+      <section className="w-full max-w-3xl border-y border-paper-line py-8">
+        <div className="mb-5 flex justify-center text-paper-accent">
+          <Clipboard aria-hidden />
+        </div>
+        <div className="text-center">
+          <h1 className="font-serif text-4xl">Answers ready</h1>
+          <p className="mt-4 text-base leading-7 text-paper-muted">{error}</p>
+          <p className="mt-2 text-sm leading-6 text-paper-muted">Select the Markdown below and paste it back to the agent.</p>
+        </div>
+        <div className="mt-8">
+          <label htmlFor="answer-markdown" className="text-xs font-semibold uppercase tracking-[0.14em] text-paper-muted">
+            Answer Markdown
+          </label>
+          <Textarea
+            id="answer-markdown"
+            readOnly
+            rows={14}
+            className="mt-2 min-h-80 resize-y font-mono text-xs leading-5"
+            value={markdown}
+            onFocus={(event) => event.currentTarget.select()}
+          />
+        </div>
+        <div className="mt-5 flex justify-end">
+          <Button type="button" variant="primary" onClick={onCopy} disabled={copying}>
+            {copying ? <Loader2 aria-hidden className="animate-spin" /> : <Clipboard aria-hidden />}
+            Copy again
+          </Button>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+async function writeClipboardText(value: string): Promise<void> {
+  if (!navigator.clipboard?.writeText) {
+    throw new Error("Clipboard access is not available in this browser.");
+  }
+
+  await navigator.clipboard.writeText(value);
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
 function createInitialAnswers(session: NormalizedSession): AnswerState {
   return Object.fromEntries(flattenGroups(session.groups).map((field) => [field.id, getInitialAnswer(field)]));
 }
@@ -962,6 +1120,10 @@ function submittedAnswersEqual(left: SubmittedAnswer | undefined, right: Submitt
     return false;
   }
 
+  if (left.type === "secret" && right.type === "secret") {
+    return left.value === right.value && normalizeTextAnswer(left.note) === normalizeTextAnswer(right.note);
+  }
+
   return left.value === right.value;
 }
 
@@ -970,11 +1132,67 @@ function validateAnswers(session: NormalizedSession, answers: AnswerState): Fiel
   return result.ok ? {} : fieldErrorsFromSubmitReport(result.report);
 }
 
+function collectSecretBundle(session: NormalizedSession, answers: AnswerState): SecretBundle | null {
+  const secrets = Object.fromEntries(
+    flattenGroups(session.groups).flatMap((field) => {
+      const answer = answers[field.id];
+      if (field.type !== "text" || !field.secret || answer?.type !== "secret") {
+        return [];
+      }
+
+      const value = answer.value;
+      if (!isSecretValuePresent(value)) {
+        return [];
+      }
+
+      return [
+        [
+          field.id,
+          {
+            value
+          }
+        ]
+      ];
+    })
+  );
+
+  return Object.keys(secrets).length > 0 ? { secrets } : null;
+}
+
+async function uploadSecretBundle(sessionId: string, submission: SecretBundleSubmission): Promise<void> {
+  const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/secrets`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(submission)
+  });
+  if (!response.ok) {
+    throw new Error(await responseErrorMessage(response, `Secret upload failed with ${response.status}.`));
+  }
+}
+
+async function responseErrorMessage(response: Response, fallback: string): Promise<string> {
+  const text = await response.text().catch(() => "");
+  if (!text) {
+    return fallback;
+  }
+
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (isRecord(parsed) && typeof parsed.error === "string") {
+      return parsed.error;
+    }
+  } catch {
+    return text;
+  }
+
+  return text;
+}
+
 async function loadRemoteSession(sessionCode: string): Promise<RemoteSessionState> {
   const sessionId = await deriveSessionId(sessionCode);
   const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`);
   if (!response.ok) {
-    throw new Error(`Session request failed with ${response.status}.`);
+    throw new Error(await responseErrorMessage(response, `Session request failed with ${response.status}.`));
   }
 
   const envelope = (await response.json()) as unknown;
@@ -1015,6 +1233,10 @@ function groupProgress(group: NormalizedGroup, answers: AnswerState): string {
 
 function isTextEditingTarget(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isDefaultSuggestionActive(field: NormalizedField, answer: SubmittedAnswer | undefined): boolean {

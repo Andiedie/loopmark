@@ -29,20 +29,20 @@ After the skill is installed, your agent learns:
 
 When the agent needs your input, it runs Loopmark once with a JSON session on stdin. The CLI encrypts the session, posts it to the Loopmark Worker, writes a local receipt file, prints a public fill URL, and exits immediately.
 
-You open the URL, answer in the browser, and tell the agent when you are done. The agent then runs `loopmark collect <receipt-file>` to fetch and decrypt the answer. The agent should not poll while waiting for you.
+You open the URL, answer in the browser, copy the Markdown answer, and paste that Markdown back to the agent. If browser clipboard access is blocked, the page shows the same Markdown for manual copy. Non-secret answers live directly in that Markdown so the conversation stays traceable. If the Markdown says secrets were omitted, the agent runs the listed `npx --yes @andie/loopmark secrets <session-id>` command to download only the encrypted secret bundle into a local `.env` file.
 
 ```bash
-npx @andie/loopmark < questions.json
+npx --yes @andie/loopmark < questions.json
 ```
 
 ```bash
-npx @andie/loopmark collect /tmp/loopmark-receipts/s_xxx.receipt.json
+npx --yes @andie/loopmark secrets s_xxx
 ```
 
 Use a self-hosted deployment with:
 
 ```bash
-npx @andie/loopmark --base-url https://your-loopmark.example < questions.json
+npx --yes @andie/loopmark --base-url https://your-loopmark.example < questions.json
 ```
 
 or set `LOOPMARK_BASE_URL`.
@@ -62,13 +62,13 @@ If the answer can be found through code, logs, tests, documentation, APIs, or we
 
 ## Privacy And Secrets
 
-Loopmark uses end-to-end encryption for question sessions and answers:
+Loopmark uses end-to-end encryption for question sessions and secrets:
 
 - The public fill link contains only a `sessionCode` in the URL hash.
-- The Worker and R2 store encrypted JSON envelopes only.
-- Browser submissions include a `sessionCode`-derived proof so a leaked `sessionId` cannot submit or overwrite an answer.
-- The local receipt file contains the answer decryption key and should not be shared.
-- Secret answers are encrypted in the browser, decrypted only during `collect`, written to a local temporary file, and omitted from the final JSON payload.
+- The Worker and R2 store encrypted question-session envelopes and encrypted secret bundles only.
+- Browser answers are copied as Markdown. Non-secret answers and notes are visible in Markdown; secret values are omitted.
+- The local receipt file contains the secret decryption key and should not be shared.
+- Secret answers are encrypted in the browser, uploaded as ciphertext, downloaded with `npx --yes @andie/loopmark secrets`, and written to a local `.env` file.
 
 The agent receives a file path for secret answers, not the secret value, and should read it only when the task truly requires it.
 
@@ -79,7 +79,7 @@ The default service is `https://loopmark.ssoo.fun`. Forks can deploy their own W
 Cloudflare resources:
 
 - Workers: hosts the API and static fill page.
-- R2: stores encrypted session and answer envelopes under `sessions/{sessionId}/session.json` and `sessions/{sessionId}/answer.json`.
+- R2: stores encrypted session envelopes under `sessions/{sessionId}/session.json` and encrypted secret bundles under `sessions/{sessionId}/secrets.json` when secrets are submitted.
 - R2 lifecycle: delete objects under `sessions/` after your desired retention window.
 - Custom domain: bind your domain to the Worker manually in the Cloudflare dashboard. Keep the R2 bucket private; Loopmark does not need an R2 public or custom domain.
 
@@ -112,4 +112,4 @@ Manual Cloudflare dashboard setup:
 
 ## For Agent Authors
 
-The skill contains the operational protocol at `skills/loopmark/SKILL.md` and `skills/loopmark/references/protocol.md`. Humans normally do not need to write Loopmark JSON by hand; the installed skill teaches the agent to generate the session, run the CLI, wait without polling, and collect the result after the human submits.
+The skill contains the operational protocol at `skills/loopmark/SKILL.md` and `skills/loopmark/references/protocol.md`. Humans normally do not need to write Loopmark JSON by hand; the installed skill teaches the agent to generate the session, run the CLI, wait for pasted Markdown, and download omitted secrets only when needed.

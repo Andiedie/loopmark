@@ -19,7 +19,7 @@ test.afterEach(async () => {
   await rm(tempDir, { recursive: true, force: true });
 });
 
-test("creates a cloud session, submits in the browser, and collects decrypted output", async ({ page }) => {
+test("creates a cloud session, copies traceable Markdown, and downloads omitted secrets", async ({ page }) => {
   if (!running) {
     throw new Error("Worker server is not running.");
   }
@@ -43,42 +43,44 @@ test("creates a cloud session, submits in the browser, and collects decrypted ou
     })
   );
   expect(create.code).toBe(0);
-  const created = JSON.parse(create.stdout) as { status: string; fillUrl: string; receiptFile: string };
+  const created = JSON.parse(create.stdout) as { status: string; fillUrl: string; receiptFile: string; sessionId: string };
   expect(created.status).toBe("created");
   expect(created.fillUrl).toMatch(new RegExp(`^${escapeRegExp(running.url)}/s#lm1_`));
   expect(create.stderr).toContain(`Loopmark URL: ${created.fillUrl}`);
 
-  const pending = await runLoopmark(["collect", created.receiptFile, "--secret-dir", tempDir]);
-  expect(pending.code).toBe(0);
-  expect(JSON.parse(pending.stdout)).toEqual({
-    status: "pending",
-    message: "Loopmark session has not been submitted yet."
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"], {
+    origin: new URL(created.fillUrl).origin
   });
-
   await page.goto(created.fillUrl);
   await expect(page.getByRole("heading", { name: "Remote input check" })).toBeVisible();
-  await page.getByLabel("What should the agent do next?").fill("Ship the cloud-only Loopmark flow.");
+  await page.getByLabel("What should the agent do next?").fill("Ship the Markdown Loopmark flow.");
   await page.getByRole("button", { name: "Ready" }).click();
-  await page.getByLabel("Optional API key").fill("secret-from-cloud-e2e");
-  await page.getByRole("button", { name: /Submit inputs/i }).click();
-  await expect(page.getByText("Inputs submitted")).toBeVisible();
+  await page.getByLabel("Optional API key", { exact: true }).fill("secret-from-cloud-e2e");
+  await page.getByLabel("Note for Optional API key").fill("Use only in the smoke test.");
+  await page.getByRole("button", { name: /Copy answers/i }).click();
+  await expect(page.getByText("Answers copied")).toBeVisible();
 
-  const collect = await runLoopmark(["collect", created.receiptFile, "--secret-dir", tempDir]);
-  expect(collect.code).toBe(0);
-  const output = JSON.parse(collect.stdout) as {
+  const markdown = await page.evaluate(() => navigator.clipboard.readText());
+  expect(markdown).toContain("> Ship the Markdown Loopmark flow.");
+  expect(markdown).toContain("> Ready");
+  expect(markdown).toContain("> Use only in the smoke test.");
+  expect(markdown).toContain(`npx --yes @andie/loopmark secrets ${created.sessionId}`);
+  expect(markdown).not.toContain("```loopmark-answer");
+  expect(markdown).not.toContain("secret-from-cloud-e2e");
+
+  const secrets = await runLoopmark(["secrets", created.sessionId, "--receipt", created.receiptFile, "--secret-dir", tempDir]);
+  expect(secrets.code).toBe(0);
+  const output = JSON.parse(secrets.stdout) as {
     status: string;
-    answers: {
-      scope: { answer: string };
-      confidence: { answer: { label: string } };
-      api_key: { answer: { secretFile: string; description: string } };
-    };
+    sessionId: string;
+    secretFile: string;
+    format: string;
   };
-  expect(output.status).toBe("submitted");
-  expect(output.answers.scope.answer).toBe("Ship the cloud-only Loopmark flow.");
-  expect(output.answers.confidence.answer).toEqual({ label: "Ready" });
+  expect(output.status).toBe("secrets_downloaded");
+  expect(output.sessionId).toBe(created.sessionId);
+  expect(output.format).toBe("env");
   expect(JSON.stringify(output)).not.toContain("secret-from-cloud-e2e");
-  expect(output.answers.api_key.answer.description).toContain("omitted");
-  expect(await readFile(output.answers.api_key.answer.secretFile, "utf8")).toBe("secret-from-cloud-e2e");
+  expect(await readFile(output.secretFile, "utf8")).toBe("api_key=secret-from-cloud-e2e\n");
 });
 
 function runLoopmark(args: string[], input = ""): Promise<{ code: number | null; stdout: string; stderr: string }> {

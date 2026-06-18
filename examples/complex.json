@@ -33,8 +33,8 @@
           "label": "Which capabilities belong in v1?",
           "type": "choice",
           "mode": "multiple",
-          "default": ["stdin JSON", "Cloud fill URL", "collect command"],
-          "options": ["stdin JSON", "Cloud fill URL", "collect command", "Paper Trail design"]
+          "default": ["stdin JSON", "Cloud fill URL", "Copied Markdown answers"],
+          "options": ["stdin JSON", "Cloud fill URL", "Copied Markdown answers", "Paper Trail design"]
         },
         {
           "id": "priority",

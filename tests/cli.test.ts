@@ -2,7 +2,7 @@ import { Readable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 import { runCli, type CliDependencies, type CliRuntime } from "../src/cli/run";
 import { parseInputJson } from "../src/shared/schema";
-import type { FinalOutput } from "../src/shared/answers";
+import type { RemoteSecretsResult } from "../src/cli/remote";
 
 function createRuntime(input: string, overrides: Partial<Pick<CliRuntime, "argv" | "env">> = {}) {
   let stdout = "";
@@ -32,16 +32,21 @@ function createRuntime(input: string, overrides: Partial<Pick<CliRuntime, "argv"
   };
 }
 
-function createDependencies(output: FinalOutput = { status: "submitted", answers: {} }): CliDependencies {
+function createDependencies(): CliDependencies {
   return {
-    parseInputJson,
+    parseInputJson: vi.fn(parseInputJson),
     createRemoteSession: vi.fn(async () => ({
       status: "created" as const,
       fillUrl: "https://loopmark.example/s#lm1_test",
       receiptFile: "/tmp/loopmark-receipts/s_test.receipt.json",
       sessionId: "s_test"
     })),
-    collectRemoteResult: vi.fn(async () => output)
+    downloadRemoteSecrets: vi.fn(async () => ({
+      status: "secrets_downloaded" as const,
+      sessionId: "s_test",
+      secretFile: "/tmp/loopmark-s_test/secrets.env",
+      format: "env" as const
+    }))
   };
 }
 
@@ -54,10 +59,10 @@ describe("CLI runner", () => {
 
     expect(code).toBe(0);
     expect(stdout()).toContain("loopmark [--base-url URL]");
-    expect(stdout()).toContain("loopmark collect <receipt-file>");
+    expect(stdout()).toContain("loopmark secrets <session-id>");
     expect(stderr()).toBe("");
     expect(dependencies.createRemoteSession).not.toHaveBeenCalled();
-    expect(dependencies.collectRemoteResult).not.toHaveBeenCalled();
+    expect(dependencies.downloadRemoteSecrets).not.toHaveBeenCalled();
   });
 
   it("prints invalid argument errors as structured stderr JSON", async () => {
@@ -71,12 +76,20 @@ describe("CLI runner", () => {
         message: "Unknown Loopmark option: --no-open"
       },
       {
-        args: ["collect"],
-        message: "Usage: loopmark collect <receipt-file> [--secret-dir DIR]"
+        args: ["secrets"],
+        message: "Usage: loopmark secrets <session-id> [--receipt FILE] [--receipt-dir DIR] [--secret-dir DIR]"
       },
       {
-        args: ["collect", "/tmp/receipt.json", "--base-url", "https://loopmark.example"],
+        args: ["secrets", "s_test", "--base-url", "https://loopmark.example"],
         message: "Unknown Loopmark option: --base-url"
+      },
+      {
+        args: ["secrets", "../escaped"],
+        message: "Loopmark session id is invalid."
+      },
+      {
+        args: ["collect"],
+        message: "Unknown Loopmark argument: collect"
       }
     ];
 
@@ -95,7 +108,7 @@ describe("CLI runner", () => {
         message: testCase.message
       });
       expect(dependencies.createRemoteSession).not.toHaveBeenCalled();
-      expect(dependencies.collectRemoteResult).not.toHaveBeenCalled();
+      expect(dependencies.downloadRemoteSecrets).not.toHaveBeenCalled();
     }
   });
 
@@ -170,49 +183,44 @@ describe("CLI runner", () => {
     });
   });
 
-  it("collects a submitted remote answer from a receipt", async () => {
-    const output: FinalOutput = {
-      status: "submitted",
-      answers: {
-        scope: {
-          question: "Scope",
-          answer: "Ship the clean implementation."
-        }
-      }
+  it("downloads remote secrets by session id without reading stdin", async () => {
+    const output: RemoteSecretsResult = {
+      status: "secrets_downloaded",
+      sessionId: "s_abcdefghijklmnopqrstuvwx",
+      secretFile: "/tmp/loopmark-secrets/secrets.env",
+      format: "env"
     };
-    const { runtime, stdout, stderr } = createRuntime("", {
-      argv: ["node", "loopmark", "collect", "/tmp/receipt.json", "--secret-dir", "/tmp/secrets"]
+    const { runtime, stdout, stderr } = createRuntime("ignored stdin", {
+      argv: [
+        "node",
+        "loopmark",
+        "secrets",
+        "s_abcdefghijklmnopqrstuvwx",
+        "--receipt",
+        "/tmp/receipt.json",
+        "--secret-dir",
+        "/tmp/loopmark-secrets"
+      ],
+      env: {
+        LOOPMARK_RECEIPT_DIR: "/tmp/env-receipts",
+        LOOPMARK_SECRET_DIR: "/tmp/env-secrets"
+      }
     });
-    const dependencies = createDependencies(output);
+    const dependencies = createDependencies();
+    dependencies.downloadRemoteSecrets = vi.fn(async () => output);
 
     const code = await runCli(runtime, dependencies);
 
     expect(code).toBe(0);
     expect(JSON.parse(stdout())).toEqual(output);
-    expect(stderr()).toBe("");
-    expect(dependencies.collectRemoteResult).toHaveBeenCalledWith("/tmp/receipt.json", {
-      secretDir: "/tmp/secrets"
+    expect(stderr()).toBe("Loopmark secrets: /tmp/loopmark-secrets/secrets.env\n");
+    expect(dependencies.downloadRemoteSecrets).toHaveBeenCalledWith("s_abcdefghijklmnopqrstuvwx", {
+      receiptFile: "/tmp/receipt.json",
+      receiptDir: "/tmp/env-receipts",
+      secretDir: "/tmp/loopmark-secrets"
     });
-  });
-
-  it("prints pending collection state without failing", async () => {
-    const { runtime, stdout, stderr } = createRuntime("", {
-      argv: ["node", "loopmark", "collect", "/tmp/receipt.json"]
-    });
-    const dependencies = createDependencies();
-    dependencies.collectRemoteResult = vi.fn(async () => ({
-      status: "pending" as const,
-      message: "Loopmark session has not been submitted yet."
-    }));
-
-    const code = await runCli(runtime, dependencies);
-
-    expect(code).toBe(0);
-    expect(JSON.parse(stdout())).toEqual({
-      status: "pending",
-      message: "Loopmark session has not been submitted yet."
-    });
-    expect(stderr()).toBe("Loopmark session has not been submitted yet.\n");
+    expect(dependencies.parseInputJson).not.toHaveBeenCalled();
+    expect(dependencies.createRemoteSession).not.toHaveBeenCalled();
   });
 
   it("prints unexpected runtime errors as structured stderr JSON", async () => {

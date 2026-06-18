@@ -1,7 +1,8 @@
 import {
-  assertAnswerSubmissionEnvelope,
+  assertSecretBundleSubmission,
   assertSessionEnvelope,
-  verifyAnswerProof
+  isValidSessionId,
+  verifySecretUploadProof
 } from "../shared/cloud-protocol";
 
 type R2ObjectBodyLike = {
@@ -30,7 +31,6 @@ export type WorkerEnv = {
 };
 
 const MAX_JSON_BODY_LENGTH = 1024 * 1024;
-const SESSION_ID_PATTERN = /^s_[A-Za-z0-9_-]{24}$/;
 
 const worker = {
   async fetch(request: Request, env: WorkerEnv): Promise<Response> {
@@ -61,12 +61,13 @@ async function handleRequest(request: Request, env: WorkerEnv): Promise<Response
     return getSession(env, sessionMatch[1]);
   }
 
-  const answerMatch = /^\/api\/sessions\/([^/]+)\/answer$/.exec(url.pathname);
-  if (answerMatch && request.method === "POST") {
-    return submitAnswer(request, env, answerMatch[1]);
+  const secretMatch = /^\/api\/sessions\/([^/]+)\/secrets$/.exec(url.pathname);
+  if (secretMatch && request.method === "POST") {
+    return putSecretBundle(request, env, secretMatch[1]);
   }
-  if (answerMatch && request.method === "GET") {
-    return getAnswer(env, answerMatch[1]);
+
+  if (secretMatch && request.method === "GET") {
+    return getSecretBundle(env, secretMatch[1]);
   }
 
   if (url.pathname.startsWith("/api/")) {
@@ -118,14 +119,9 @@ async function getSession(env: WorkerEnv, sessionId: string): Promise<Response> 
   return jsonText(await object.text(), 200);
 }
 
-async function submitAnswer(request: Request, env: WorkerEnv, sessionId: string): Promise<Response> {
+async function putSecretBundle(request: Request, env: WorkerEnv, sessionId: string): Promise<Response> {
   if (!isValidSessionId(sessionId)) {
     return json({ error: "Session id is invalid." }, 400);
-  }
-
-  const sessionObject = await env.LOOPMARK_SESSIONS.get(sessionKey(sessionId));
-  if (!sessionObject) {
-    return json({ error: "Loopmark session was not found." }, 404);
   }
 
   const body = await readJsonBody(request);
@@ -134,44 +130,55 @@ async function submitAnswer(request: Request, env: WorkerEnv, sessionId: string)
   }
 
   try {
-    assertAnswerSubmissionEnvelope(body.value);
+    assertSecretBundleSubmission(body.value);
   } catch (error) {
-    return json({ error: error instanceof Error ? error.message : "Answer submission is invalid." }, 400);
+    return json({ error: error instanceof Error ? error.message : "Secret submission is invalid." }, 400);
   }
 
-  const sessionEnvelope = parseStoredSessionEnvelope(await sessionObject.text());
-  if (!(await verifyAnswerProof(body.value.answerProof, sessionEnvelope.answerProofHash))) {
-    return json({ error: "Answer submission proof is invalid." }, 403);
+  if (body.value.sessionId !== sessionId) {
+    return json({ error: "Secret submission session id does not match the URL." }, 400);
   }
 
-  if (body.value.envelope.sessionId !== sessionId) {
-    return json({ error: "Answer envelope does not match the session id." }, 400);
+  const sessionObject = await env.LOOPMARK_SESSIONS.get(sessionKey(sessionId));
+  if (!sessionObject) {
+    return json({ error: "Loopmark session was not found." }, 404);
   }
 
-  const written = await env.LOOPMARK_SESSIONS.put(answerKey(sessionId), JSON.stringify(body.value.envelope), {
+  let sessionEnvelope: unknown;
+  try {
+    sessionEnvelope = JSON.parse(await sessionObject.text()) as unknown;
+    assertSessionEnvelope(sessionEnvelope);
+  } catch (error) {
+    return json({ error: error instanceof Error ? error.message : "Stored Loopmark session is invalid." }, 500);
+  }
+
+  const authorized = await verifySecretUploadProof({
+    secretUploadProof: body.value.secretUploadProof,
+    secretUploadProofHash: sessionEnvelope.secretUploadProofHash
+  });
+  if (!authorized) {
+    return json({ error: "Secret upload proof is invalid." }, 403);
+  }
+
+  const written = await env.LOOPMARK_SESSIONS.put(secretBundleKey(sessionId), JSON.stringify(body.value.envelope), {
     httpMetadata: { contentType: "application/json; charset=utf-8" },
     onlyIf: { etagDoesNotMatch: "*" }
   });
   if (written === null) {
-    return json({ error: "Loopmark session has already been submitted." }, 409);
+    return json({ error: "Loopmark secret bundle already exists." }, 409);
   }
 
-  return json({ ok: true }, 201);
+  return json({ ok: true, sessionId }, 201);
 }
 
-async function getAnswer(env: WorkerEnv, sessionId: string): Promise<Response> {
+async function getSecretBundle(env: WorkerEnv, sessionId: string): Promise<Response> {
   if (!isValidSessionId(sessionId)) {
     return json({ error: "Session id is invalid." }, 400);
   }
 
-  const session = await env.LOOPMARK_SESSIONS.get(sessionKey(sessionId));
-  if (!session) {
-    return json({ error: "Loopmark session was not found." }, 404);
-  }
-
-  const object = await env.LOOPMARK_SESSIONS.get(answerKey(sessionId));
+  const object = await env.LOOPMARK_SESSIONS.get(secretBundleKey(sessionId));
   if (!object) {
-    return json({ status: "pending" }, 202);
+    return json({ error: "Loopmark secret bundle was not found." }, 404);
   }
 
   return jsonText(await object.text(), 200);
@@ -181,18 +188,8 @@ function sessionKey(sessionId: string): string {
   return `sessions/${sessionId}/session.json`;
 }
 
-function answerKey(sessionId: string): string {
-  return `sessions/${sessionId}/answer.json`;
-}
-
-function parseStoredSessionEnvelope(raw: string): { answerProofHash: string } {
-  const parsed = JSON.parse(raw) as unknown;
-  assertSessionEnvelope(parsed);
-  return parsed;
-}
-
-function isValidSessionId(sessionId: string): boolean {
-  return SESSION_ID_PATTERN.test(sessionId);
+function secretBundleKey(sessionId: string): string {
+  return `sessions/${sessionId}/secrets.json`;
 }
 
 async function readJsonBody(request: Request): Promise<{ ok: true; value: unknown } | { ok: false; message: string }> {

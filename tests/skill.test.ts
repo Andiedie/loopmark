@@ -42,7 +42,7 @@ describe("bundled Loopmark skill", () => {
     expect(skill).toContain("printf '%s\\n'");
     expect(skill).toContain("| npx --yes @andie/loopmark");
     expect(skill).toContain("npx --yes @andie/loopmark < /path/to/questions.json");
-    expect(skill).toContain("npx --yes @andie/loopmark collect /path/to/s_xxx.receipt.json");
+    expect(skill).toContain("npx --yes @andie/loopmark secrets s_xxx");
     expect(skill).toContain("`--yes` belongs to `npx`");
     expect(skill).toContain("Do not poll");
     expect(skill).toContain("Treat every field as optional");
@@ -79,6 +79,25 @@ describe("bundled Loopmark skill", () => {
     expect(readme).not.toContain("## Release");
   });
 
+  it("keeps README Loopmark commands non-interactive for agents", () => {
+    const readme = readFixture("../README.md");
+
+    expect(readme).toContain("npx --yes @andie/loopmark < questions.json");
+    expect(readme).toContain("npx --yes @andie/loopmark secrets s_xxx");
+    expect(readme).toContain("npx --yes @andie/loopmark --base-url https://your-loopmark.example < questions.json");
+    expect(readme).not.toContain("npx @andie/loopmark < questions.json");
+    expect(readme).not.toContain("npx @andie/loopmark secrets s_xxx");
+  });
+
+  it("keeps design documentation aligned with pasted Markdown transport", () => {
+    const design = readFixture("../DESIGN.md");
+
+    expect(design).toContain("copy Markdown");
+    expect(design).toContain("local `.env` retrieval");
+    expect(design).not.toContain("import-file");
+    expect(design).not.toContain("imports Markdown");
+  });
+
   it("publishes the skill directory with the npm package", () => {
     const packageJson = JSON.parse(readFixture("../package.json")) as { files?: string[] };
 
@@ -93,14 +112,16 @@ describe("bundled Loopmark skill", () => {
     expect(protocol).toContain("Use another Loopmark server");
     expect(protocol).toContain("Create with inline stdin");
     expect(protocol).toContain("Create with file redirection");
+    expect(protocol).toContain("npx --yes @andie/loopmark secrets s_xxx");
+    expect(protocol).toContain("secretFile");
+    expect(protocol).toContain("normal note textarea");
     expect(protocol).toContain("All fields are optional");
     expect(protocol).toContain("Loopmark always adds a system `Other` option");
-    expect(protocol).toContain("Choice answers may include a `note` string");
+    expect(protocol).toContain("Choice answers may include a note");
     expect(protocol).not.toContain("`required`");
     expect(protocol).not.toContain("allowCustom");
     expect(protocol).not.toContain("editable");
     expect(protocol).not.toContain("{ \"value\", \"label\"");
-    expect(protocol).not.toContain("\"format\"");
     expect(protocol).toContain("npx --yes @andie/loopmark --base-url https://your-loopmark.example");
     expect(protocol).toContain("LOOPMARK_BASE_URL");
     expect(skill).toContain("#self-hosting-on-cloudflare");
