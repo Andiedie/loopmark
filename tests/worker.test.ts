@@ -61,7 +61,7 @@ describe("Cloudflare Worker API", () => {
   it("stores an encrypted session, accepts one encrypted answer, and returns pending before submit", async () => {
     const session = normalizeSession({
       title: "Need input",
-      fields: [{ id: "scope", label: "Scope", type: "text", required: true }]
+      fields: [{ id: "scope", label: "Scope", type: "text" }]
     });
     const created = await createRemoteSessionPackage({
       session,

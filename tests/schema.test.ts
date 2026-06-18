@@ -16,10 +16,39 @@ describe("input schema normalization", () => {
     expect(session.groups[0].fields[0]).toMatchObject({
       id: "scope",
       type: "text",
-      required: false,
       multiline: false,
-      secret: false,
-      format: "plain"
+      secret: false
+    });
+    expect(session.groups[0].fields[0]).not.toHaveProperty("required");
+    expect(session.groups[0].fields[0]).not.toHaveProperty("format");
+  });
+
+  it("accepts but removes legacy field and option knobs from normalized output", () => {
+    const session = normalizeSession({
+      title: "Need input",
+      fields: [
+        { id: "notes", label: "Notes", type: "text", required: true, format: "markdown" },
+        {
+          id: "choice",
+          label: "Choice",
+          type: "choice",
+          required: true,
+          allowCustom: false,
+          editable: false,
+          options: [{ value: "a", label: "A" }]
+        }
+      ]
+    });
+
+    const [textField, choiceField] = session.groups[0].fields;
+    expect(textField).not.toHaveProperty("required");
+    expect(textField).not.toHaveProperty("format");
+    expect(choiceField).not.toHaveProperty("required");
+    expect(choiceField).not.toHaveProperty("allowCustom");
+    expect(choiceField).not.toHaveProperty("editable");
+    expect(choiceField.type === "choice" ? choiceField.options[0] : undefined).toEqual({
+      id: "option_1",
+      label: "A"
     });
   });
 
@@ -46,14 +75,14 @@ describe("input schema normalization", () => {
     });
 
     const field = session.groups[0].fields[0];
-    expect(field).toMatchObject({ type: "choice", mode: "ranking", allowCustom: true, editable: true });
+    expect(field).toMatchObject({ type: "choice", mode: "ranking" });
     expect(field.type === "choice" ? field.defaultItems : []).toEqual([
-      { id: "schema", value: "schema", label: "Input validation", description: "Readable errors." },
-      { id: "option_2", value: "CLI lifecycle", label: "CLI lifecycle" }
+      { id: "option_1", label: "Input validation", description: "Readable errors." },
+      { id: "option_2", label: "CLI lifecycle" }
     ]);
   });
 
-  it("accepts object defaults as custom choice feedback", () => {
+  it("treats object defaults as existing options and ignores legacy option values", () => {
     const session = normalizeSession({
       title: "Need input",
       fields: [
@@ -61,29 +90,6 @@ describe("input schema normalization", () => {
           id: "style",
           type: "choice",
           label: "Preferred style",
-          default: { label: "Paper Trail", description: "Elegant document-like UI." },
-          options: ["Simple", "Complete"]
-        }
-      ]
-    });
-
-    const field = session.groups[0].fields[0];
-    expect(field.type === "choice" ? field.defaultItems[0] : undefined).toMatchObject({
-      label: "Paper Trail",
-      description: "Elegant document-like UI.",
-      custom: true
-    });
-  });
-
-  it("treats object defaults as existing options before creating custom defaults", () => {
-    const session = normalizeSession({
-      title: "Need input",
-      fields: [
-        {
-          id: "style",
-          type: "choice",
-          label: "Preferred style",
-          allowCustom: false,
           default: { label: "Paper Trail", description: "Use the refined document direction." },
           options: [
             { value: "paper", label: "Paper Trail", description: "Original option description." },
@@ -95,18 +101,16 @@ describe("input schema normalization", () => {
 
     const field = session.groups[0].fields[0];
     expect(field.type === "choice" ? field.defaultItems[0] : undefined).toMatchObject({
-      id: "paper",
-      value: "paper",
+      id: "option_1",
       label: "Paper Trail",
       description: "Use the refined document direction."
     });
-    expect(field.type === "choice" ? field.defaultItems[0].custom : undefined).toBeUndefined();
 
     const answers = Object.fromEntries(session.groups.flatMap((group) => group.fields).map((item) => [item.id, getInitialAnswer(item)]));
     expect(validateSubmitPayload(session, { answers })).toMatchObject({ ok: true });
   });
 
-  it("rejects custom object defaults when custom answers are disabled", () => {
+  it("rejects defaults that do not match existing option labels", () => {
     expect.assertions(2);
 
     try {
@@ -117,7 +121,6 @@ describe("input schema normalization", () => {
             id: "style",
             type: "choice",
             label: "Preferred style",
-            allowCustom: false,
             default: { label: "Editorial Review", description: "This is not an existing option." },
             options: ["Paper Trail", "Plain Form"]
           }
@@ -205,27 +208,6 @@ describe("input schema normalization", () => {
     }
   });
 
-  it("accepts compact custom object defaults without descriptions", () => {
-    const session = normalizeSession({
-      title: "Need input",
-      fields: [
-        {
-          id: "scope",
-          type: "choice",
-          label: "Scope",
-          options: ["CLI"],
-          default: { label: "Custom direction" }
-        }
-      ]
-    });
-
-    const field = session.groups[0].fields[0];
-    expect(field.type === "choice" ? field.defaultItems[0] : undefined).toMatchObject({
-      label: "Custom direction",
-      custom: true
-    });
-  });
-
   it("returns an agent-readable JSON parse error", () => {
     expect(() => parseInputJson("{nope")).toThrow(LoopmarkInputError);
 
@@ -308,7 +290,7 @@ describe("input schema normalization", () => {
     }
   });
 
-  it("rejects secret defaults and duplicate option values", () => {
+  it("rejects secret defaults and ignores duplicate legacy option values", () => {
     expect(() =>
       normalizeSession({
         title: "Need input",
@@ -316,22 +298,24 @@ describe("input schema normalization", () => {
       })
     ).toThrow(LoopmarkInputError);
 
-    expect(() =>
-      normalizeSession({
-        title: "Need input",
-        fields: [
-          {
-            id: "choice",
-            type: "choice",
-            label: "Choice",
-            options: [
-              { value: "a", label: "A" },
-              { value: "a", label: "Again" }
-            ]
-          }
-        ]
-      })
-    ).toThrow(LoopmarkInputError);
+    const session = normalizeSession({
+      title: "Need input",
+      fields: [
+        {
+          id: "choice",
+          type: "choice",
+          label: "Choice",
+          options: [
+            { value: "a", label: "A" },
+            { value: "a", label: "Again" }
+          ]
+        }
+      ]
+    });
+    expect(session.groups[0].fields[0].type === "choice" ? session.groups[0].fields[0].options : []).toEqual([
+      { id: "option_1", label: "A" },
+      { id: "option_2", label: "Again" }
+    ]);
   });
 
   it("rejects duplicate choice option labels because answers use labels", () => {
@@ -410,7 +394,6 @@ describe("input schema normalization", () => {
             label: "Choice",
             type: "choice",
             options: ["A"],
-            allowCustom: false,
             default: "B"
           }
         ]

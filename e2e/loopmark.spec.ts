@@ -1,48 +1,16 @@
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { extname, join, resolve, sep } from "node:path";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
 import { test, expect } from "@playwright/test";
-import worker, { type WorkerEnv } from "../src/server/worker";
-
-class MemoryR2Object {
-  constructor(private readonly value: string) {}
-
-  async text(): Promise<string> {
-    return this.value;
-  }
-}
-
-class MemoryR2Bucket {
-  private readonly objects = new Map<string, string>();
-
-  async get(key: string): Promise<MemoryR2Object | null> {
-    const value = this.objects.get(key);
-    return value === undefined ? null : new MemoryR2Object(value);
-  }
-
-  async put(key: string, value: string, options?: { onlyIf?: { etagDoesNotMatch?: string } }): Promise<unknown | null> {
-    if (options?.onlyIf?.etagDoesNotMatch === "*" && this.objects.has(key)) {
-      return null;
-    }
-
-    this.objects.set(key, value);
-    return { key };
-  }
-}
-
-type RunningWorkerServer = {
-  url: string;
-  close: () => Promise<void>;
-};
+import { startLocalLoopmarkServer, type RunningLoopmarkServer } from "../src/server/local-server";
 
 let tempDir: string;
-let running: RunningWorkerServer | undefined;
+let running: RunningLoopmarkServer | undefined;
 
 test.beforeEach(async () => {
   tempDir = await mkdtemp(join(tmpdir(), "loopmark-e2e-"));
-  running = await startWorkerServer(resolve("dist/web"));
+  running = await startLocalLoopmarkServer(resolve("dist/web"));
 });
 
 test.afterEach(async () => {
@@ -62,13 +30,12 @@ test("creates a cloud session, submits in the browser, and collects decrypted ou
       title: "Remote input check",
       description: "A full cloud protocol smoke test.",
       fields: [
-        { id: "scope", label: "What should the agent do next?", type: "text", required: true },
+        { id: "scope", label: "What should the agent do next?", type: "text" },
         {
           id: "confidence",
           label: "How confident are you?",
           type: "choice",
           mode: "single",
-          required: true,
           options: ["Ready", "Needs another pass"]
         },
         { id: "api_key", label: "Optional API key", type: "text", secret: true }
@@ -90,7 +57,7 @@ test("creates a cloud session, submits in the browser, and collects decrypted ou
 
   await page.goto(created.fillUrl);
   await expect(page.getByRole("heading", { name: "Remote input check" })).toBeVisible();
-  await page.getByLabel("What should the agent do next?*").fill("Ship the cloud-only Loopmark flow.");
+  await page.getByLabel("What should the agent do next?").fill("Ship the cloud-only Loopmark flow.");
   await page.getByRole("button", { name: "Ready" }).click();
   await page.getByLabel("Optional API key").fill("secret-from-cloud-e2e");
   await page.getByRole("button", { name: /Submit inputs/i }).click();
@@ -113,133 +80,6 @@ test("creates a cloud session, submits in the browser, and collects decrypted ou
   expect(output.answers.api_key.answer.description).toContain("omitted");
   expect(await readFile(output.answers.api_key.answer.secretFile, "utf8")).toBe("secret-from-cloud-e2e");
 });
-
-async function startWorkerServer(webRoot: string): Promise<RunningWorkerServer> {
-  const env: WorkerEnv = {
-    LOOPMARK_SESSIONS: new MemoryR2Bucket(),
-    ASSETS: createAssetsBinding(webRoot)
-  };
-  const server = createServer((request, response) => {
-    void handleNodeRequest(request, response, env);
-  });
-
-  await new Promise<void>((resolvePromise) => {
-    server.listen(0, "127.0.0.1", resolvePromise);
-  });
-
-  const address = server.address();
-  if (!address || typeof address === "string") {
-    throw new Error("Unable to determine Worker test server address.");
-  }
-
-  return {
-    url: `http://127.0.0.1:${address.port}`,
-    close: () =>
-      new Promise((resolvePromise, rejectPromise) => {
-        server.close((error) => {
-          if (error) {
-            rejectPromise(error);
-            return;
-          }
-          resolvePromise();
-        });
-      })
-  };
-}
-
-async function handleNodeRequest(
-  incoming: IncomingMessage,
-  outgoing: ServerResponse,
-  env: WorkerEnv
-): Promise<void> {
-  try {
-    const request = await toFetchRequest(incoming);
-    const response = await worker.fetch(request, env);
-    await writeFetchResponse(outgoing, response);
-  } catch (error) {
-    outgoing.statusCode = 500;
-    outgoing.setHeader("content-type", "text/plain; charset=utf-8");
-    outgoing.end(error instanceof Error ? error.message : "Unexpected test server error.");
-  }
-}
-
-async function toFetchRequest(incoming: IncomingMessage): Promise<Request> {
-  const host = incoming.headers.host ?? "127.0.0.1";
-  const chunks: Buffer[] = [];
-  for await (const chunk of incoming) {
-    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
-  }
-
-  return new Request(`http://${host}${incoming.url ?? "/"}`, {
-    method: incoming.method,
-    headers: incoming.headers as HeadersInit,
-    body: chunks.length > 0 ? Buffer.concat(chunks) : undefined
-  });
-}
-
-async function writeFetchResponse(outgoing: ServerResponse, response: Response): Promise<void> {
-  outgoing.statusCode = response.status;
-  response.headers.forEach((value, key) => {
-    outgoing.setHeader(key, value);
-  });
-
-  if (!response.body) {
-    outgoing.end();
-    return;
-  }
-
-  outgoing.end(Buffer.from(await response.arrayBuffer()));
-}
-
-function createAssetsBinding(webRoot: string): WorkerEnv["ASSETS"] {
-  return {
-    fetch: async (request) => {
-      const url = new URL(request.url);
-      const file = safeAssetPath(webRoot, url.pathname);
-      if (!file) {
-        return new Response("Not found", { status: 404 });
-      }
-
-      try {
-        const body = await readFile(file);
-        return new Response(body, {
-          headers: { "content-type": contentType(file) }
-        });
-      } catch {
-        return new Response("Not found", { status: 404 });
-      }
-    }
-  };
-}
-
-function safeAssetPath(webRoot: string, pathname: string): string | null {
-  const decoded = decodeURIComponent(pathname);
-  const relative = decoded === "/" || decoded === "/s" ? "index.html" : decoded.replace(/^\/+/, "");
-  const file = resolve(webRoot, relative);
-  if (file !== webRoot && !file.startsWith(`${webRoot}${sep}`)) {
-    return null;
-  }
-  return file;
-}
-
-function contentType(file: string): string {
-  switch (extname(file)) {
-    case ".html":
-      return "text/html; charset=utf-8";
-    case ".js":
-      return "text/javascript; charset=utf-8";
-    case ".css":
-      return "text/css; charset=utf-8";
-    case ".png":
-      return "image/png";
-    case ".ico":
-      return "image/x-icon";
-    case ".webmanifest":
-      return "application/manifest+json; charset=utf-8";
-    default:
-      return "application/octet-stream";
-  }
-}
 
 function runLoopmark(args: string[], input = ""): Promise<{ code: number | null; stdout: string; stderr: string }> {
   return new Promise((resolvePromise, rejectPromise) => {

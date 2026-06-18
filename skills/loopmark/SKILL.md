@@ -15,6 +15,8 @@ Loopmark is a cloud-only human-input handoff for agents. Use it to create an enc
 - Use Loopmark when the blocker is a real human decision: product tradeoff, preference, approval, private context, credential, or ranked priority.
 - Ask the smallest useful question set. Prefer 1-5 high-signal fields with clear labels, tradeoffs, and useful defaults.
 - Prefer choices for product decisions, rankings for priority ordering, multiline text for nuanced context, and secret text only for sensitive values.
+- Treat every field as optional.
+- Do not include an `Other` option in single-choice or multiple-choice fields. Loopmark adds `Other` automatically, and it is always present on the fill page for those modes.
 - Treat stdout as the only machine-readable stream. Treat stderr as human-readable operational output.
 - Do not poll. Create once, wait for the human to say they submitted the form, then run `collect` once.
 
@@ -62,7 +64,6 @@ For a self-hosted Loopmark service, pass `--base-url https://your-loopmark.examp
       "label": "Which implementation scope should I use?",
       "type": "choice",
       "mode": "single",
-      "required": true,
       "default": {
         "label": "Bundled Skill support",
         "description": "Ship the Skill in the repository so Vercel skills can install it."
@@ -82,7 +83,6 @@ For a self-hosted Loopmark service, pass `--base-url https://your-loopmark.examp
       "id": "notes",
       "label": "Any nuance I should preserve?",
       "type": "text",
-      "format": "markdown",
       "multiline": true
     }
   ]

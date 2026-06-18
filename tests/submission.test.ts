@@ -3,6 +3,27 @@ import { normalizeSession } from "../src/shared/schema";
 import { fieldErrorsFromSubmitReport, validateSubmitPayload } from "../src/shared/submission";
 
 describe("submit payload validation", () => {
+  it("reports malformed submit payloads before field-level validation", () => {
+    const session = normalizeSession({
+      title: "Need input",
+      fields: [{ id: "notes", label: "Notes", type: "text" }]
+    });
+
+    const result = validateSubmitPayload(session, {
+      answers: {
+        notes: { type: "text", value: 123 }
+      }
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      report: {
+        status: "invalid_submit",
+        errors: [expect.objectContaining({ code: "invalid_submit_payload" })]
+      }
+    });
+  });
+
   it("rejects duplicate choice labels in one submitted answer", () => {
     const session = normalizeSession({
       title: "Need input",
@@ -32,7 +53,7 @@ describe("submit payload validation", () => {
     });
   });
 
-  it("allows custom choice labels only when the field allows custom answers", () => {
+  it("allows Other labels for single and multiple choice answers", () => {
     const session = normalizeSession({
       title: "Need input",
       fields: [
@@ -41,7 +62,6 @@ describe("submit payload validation", () => {
           label: "Decision",
           type: "choice",
           mode: "multiple",
-          allowCustom: true,
           options: ["A", "B"]
         }
       ]
@@ -56,11 +76,90 @@ describe("submit payload validation", () => {
     expect(result).toMatchObject({ ok: true });
   });
 
+  it("allows system Other answers for single and multiple choices", () => {
+    const session = normalizeSession({
+      title: "Need input",
+      fields: [
+        {
+          id: "single",
+          label: "Single",
+          type: "choice",
+          mode: "single",
+          options: ["A", "B"]
+        },
+        {
+          id: "many",
+          label: "Many",
+          type: "choice",
+          mode: "multiple",
+          options: ["A", "B"]
+        }
+      ]
+    });
+
+    const result = validateSubmitPayload(session, {
+      answers: {
+        single: { type: "choice", items: [{ label: "C" }] },
+        many: { type: "choice", items: [{ label: "D" }] }
+      }
+    });
+
+    expect(result).toMatchObject({ ok: true });
+  });
+
+  it("rejects multiple selected items for a single choice answer", () => {
+    const session = normalizeSession({
+      title: "Need input",
+      fields: [{ id: "decision", label: "Decision", type: "choice", options: ["A", "B"] }]
+    });
+
+    const result = validateSubmitPayload(session, {
+      answers: {
+        decision: { type: "choice", items: [{ label: "A" }, { label: "B" }] }
+      }
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      report: {
+        errors: [expect.objectContaining({ fieldId: "decision", code: "too_many_single_choice_items" })]
+      }
+    });
+  });
+
+  it("rejects unknown ranking labels because ranking has no Other option", () => {
+    const session = normalizeSession({
+      title: "Need input",
+      fields: [
+        {
+          id: "priority",
+          label: "Priority",
+          type: "choice",
+          mode: "ranking",
+          options: ["A", "B"]
+        }
+      ]
+    });
+
+    const result = validateSubmitPayload(session, {
+      answers: {
+        priority: { type: "choice", items: [{ label: "C" }] }
+      }
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      report: {
+        errors: [expect.objectContaining({ fieldId: "priority", code: "unknown_choice_item" })]
+      }
+    });
+  });
+
   it("rejects unknown answer fields and answer type mismatches", () => {
     const session = normalizeSession({
       title: "Need input",
       fields: [
-        { id: "notes", label: "Notes", type: "text", required: true },
+        { id: "notes", label: "Notes", type: "text" },
         { id: "secret", label: "Secret", type: "text", secret: true },
         { id: "choice", label: "Choice", type: "choice", options: ["A"] }
       ]
@@ -86,6 +185,22 @@ describe("submit payload validation", () => {
         ])
       }
     });
+  });
+
+  it("ignores legacy required flags during submission", () => {
+    const session = normalizeSession({
+      title: "Need input",
+      fields: [
+        { id: "notes", label: "Notes", type: "text", required: true },
+        { id: "choice", label: "Choice", type: "choice", required: true, options: ["A"] }
+      ]
+    });
+
+    expect(
+      validateSubmitPayload(session, {
+        answers: {}
+      })
+    ).toMatchObject({ ok: true });
   });
 
   it("rejects empty choice labels and maps only the first field error for display", () => {

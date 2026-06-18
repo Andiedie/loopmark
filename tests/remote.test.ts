@@ -48,7 +48,7 @@ describe("remote CLI client", () => {
     const session = normalizeSession({
       title: "Need input",
       fields: [
-        { id: "scope", label: "Scope", type: "text", required: true },
+        { id: "scope", label: "Scope", type: "text" },
         { id: "api_key", label: "API key", type: "text", secret: true }
       ]
     });
@@ -164,7 +164,7 @@ describe("remote CLI client", () => {
     ).rejects.toThrow("Loopmark session was not found.");
   });
 
-  it("rejects decrypted answers that do not satisfy the original session", async () => {
+  it("rejects decrypted answers with invalid field shapes", async () => {
     const store: { session?: SessionEnvelope; answer?: AnswerEnvelope } = {};
     const fetchMock = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
       const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url);
@@ -181,8 +181,8 @@ describe("remote CLI client", () => {
       return new Response(JSON.stringify({ status: "pending" }), { status: 202 });
     };
     const session = normalizeSession({
-      title: "Need required input",
-      fields: [{ id: "scope", label: "Scope", type: "text", required: true }]
+      title: "Need input",
+      fields: [{ id: "scope", label: "Scope", type: "text" }]
     });
 
     const created = await createRemoteSession(session, {
@@ -198,7 +198,11 @@ describe("remote CLI client", () => {
     store.answer = await encryptAnswerEnvelope({
       sessionId: created.sessionId,
       answerPublicKey: decryptedSession.answerPublicKey,
-      payload: { answers: {} }
+      payload: {
+        answers: {
+          scope: { type: "choice", items: [{ label: "wrong type" }] }
+        }
+      }
     });
 
     await expect(

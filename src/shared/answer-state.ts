@@ -1,4 +1,4 @@
-import type { NormalizedChoiceField, NormalizedField } from "./schema";
+import type { NormalizedField } from "./schema";
 
 export type ChoiceAnswerItem = {
   label: string;
@@ -8,7 +8,7 @@ export type ChoiceAnswerItem = {
 export type SubmittedAnswer =
   | { type: "text"; value: string | null }
   | { type: "secret"; value: string | null }
-  | { type: "choice"; items: ChoiceAnswerItem[] | null };
+  | { type: "choice"; items: ChoiceAnswerItem[] | null; note?: string | null };
 
 export type SubmitPayload = {
   answers: Record<string, SubmittedAnswer>;
@@ -58,11 +58,7 @@ export function toAnswerItem(item: Pick<ChoiceAnswerItem, "label" | "description
   };
 }
 
-export function isAnswerComplete(field: NormalizedField, answer: SubmittedAnswer | undefined): boolean {
-  if (!field.required) {
-    return true;
-  }
-
+export function isAnswerPresent(field: NormalizedField, answer: SubmittedAnswer | undefined): boolean {
   if (!answer) {
     return false;
   }
@@ -72,20 +68,12 @@ export function isAnswerComplete(field: NormalizedField, answer: SubmittedAnswer
       return false;
     }
 
-    return Boolean(answer.value && answer.value.trim().length > 0);
+    return normalizeTextAnswer(answer.value) !== null;
   }
 
   if (answer.type !== "choice") {
     return false;
   }
 
-  if (field.mode === "single") {
-    return normalizeChoiceItems(answer.items).length === 1;
-  }
-
-  return normalizeChoiceItems(answer.items).length > 0;
-}
-
-export function isChoiceField(field: NormalizedField): field is NormalizedChoiceField {
-  return field.type === "choice";
+  return normalizeChoiceItems(answer.items).length > 0 || normalizeTextAnswer(answer.note) !== null;
 }

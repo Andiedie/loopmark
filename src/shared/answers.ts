@@ -17,8 +17,8 @@ export const SECRET_DESCRIPTION =
 export type FinalAnswer =
   | { question: string; answer: string | null }
   | { question: string; answer: { secretFile: string; description: string } | null }
-  | { question: string; answer: ChoiceAnswerItem | null }
-  | { question: string; answer: ChoiceAnswerItem[] | null };
+  | { question: string; answer: ChoiceAnswerItem | null; note?: string }
+  | { question: string; answer: ChoiceAnswerItem[] | null; note?: string };
 
 export type FinalOutput = {
   status: "submitted";
@@ -87,16 +87,21 @@ async function buildFieldAnswer(
 
   const items = submitted?.type === "choice" ? submitted.items : null;
   const cleaned = normalizeChoiceItems(items);
+  const note = submitted?.type === "choice" ? normalizeTextAnswer(submitted.note) : null;
+  const base = {
+    question: field.label,
+    ...(note ? { note } : {})
+  };
 
   if (field.mode === "single") {
     return {
-      question: field.label,
+      ...base,
       answer: cleaned[0] ?? null
     };
   }
 
   return {
-    question: field.label,
+    ...base,
     answer: cleaned.length > 0 ? cleaned : null
   };
 }

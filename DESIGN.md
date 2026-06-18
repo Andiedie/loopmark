@@ -1,6 +1,6 @@
 # Loopmark Design
 
-Loopmark is a cloud human-input handoff for AI Agents. It reads a compact JSON question session, opens a public encrypted fill page, and lets the calling agent collect dense human feedback later. The interface is not a form builder, dashboard, survey SaaS, or approval system. It is a quiet, well-set document where a human can review, edit, rank, and submit answers with confidence.
+Loopmark is a cloud human-input handoff for AI Agents. It reads a compact JSON question session, opens a public encrypted fill page, and lets the calling agent collect dense human feedback later. The interface is not a form builder, dashboard, survey SaaS, or approval system. It is a quiet, well-set document where a human can review, answer, rank, annotate, and submit with confidence.
 
 ## 1. Design Goal
 
@@ -19,7 +19,7 @@ Design priorities:
 
 ### 2.1 Document First
 
-The primary surface is a document with a title, context, chapters, numbered questions, editable answers, marginal notes, and a final submit action. Use typography, spacing, and fine rules before panels or cards.
+The primary surface is a document with a title, context, chapters, numbered questions, answer controls, choice notes, marginal notes, and a final submit action. Use typography, spacing, and fine rules before panels or cards.
 
 ### 2.2 Content Before Chrome
 
@@ -27,11 +27,11 @@ Questions and answers get the widest and clearest reading path. Controls should 
 
 ### 2.3 Human Edits Are First-Class
 
-Agent-provided defaults are editable drafts. Choice answers, ranking items, custom options, labels, and descriptions must be directly editable when the schema allows it.
+Agent-provided defaults are suggestions. Text defaults can be edited directly, choice defaults can be changed or cleared, and ranking defaults can be reordered or removed.
 
 ### 2.4 State Must Be Explicit
 
-Required progress, selected choices, validation errors, collapsed groups, secret handling, loading, and submitted states must be visible without making the page feel noisy.
+Answered progress, selected choices, validation errors, collapsed groups, secret handling, loading, and submitted states must be visible without making the page feel noisy.
 
 ### 2.5 Compact Output, Rich Context
 
@@ -45,7 +45,7 @@ Ungrouped sessions should become an elegant single-column document. Grouped sess
 
 ```text
 App Shell
-├── Top Bar: product name, session title, required progress
+├── Top Bar: product name, session title, answered progress
 ├── Outline: grouped-session table of contents only
 ├── Document Workspace: title, description, groups, questions, answer controls
 └── Action Bar: submit action and validation copy
@@ -111,7 +111,7 @@ Rules:
 - Use fine borders and typographic hierarchy instead of cards and shadows.
 - Use deep green only for progress, selected states, primary action, and numbering accents.
 - Avoid large rounded cards, nested cards, glassmorphism, colored metric blocks, saturated gradients, and decorative illustrations.
-- Icons are small functional marks only: add, remove, reorder, lock, collapse, error, loading.
+- Icons are small functional marks only: remove, reorder, lock, collapse, error, loading.
 - Shadows are avoided in the main document. If needed for overlays later, use only subtle elevation.
 
 ## 6. Design Tokens
@@ -152,7 +152,7 @@ Type rules:
 - Controls, progress, buttons, labels, and helper text use sans.
 - Do not scale font size with viewport width.
 - Letter spacing should be normal except for small uppercase utility labels.
-- Long user-editable descriptions should use multiline controls.
+- Long free-form answers should use multiline controls.
 
 ### Spacing
 
@@ -199,7 +199,7 @@ Primary document UI should not use visible shadows. Borders and spacing are the 
 
 ### Textarea
 
-- Use for ordinary text answers, long descriptions, custom option descriptions, ranking descriptions, and multi-line answers.
+- Use for ordinary text answers, choice notes, secret multiline answers, and multi-line answers.
 - Description editors should show at least two lines.
 - Do not expose `Markdown`, `Code`, or `Text` type markers in the UI. All free-form answers are simply text.
 
@@ -210,34 +210,24 @@ Primary document UI should not use visible shadows. Borders and spacing are the 
 - Options show label and description before selection when description exists.
 - Options use a readable ruled list, not tiny chips or desktop two-column grids. One option occupies one row so label and description have a stable reading path.
 - `single`, `multiple`, and `ranking` use the same label/description answer item shape.
-- `single` and `multiple` default to direct selection only. Do not show selected-answer editors by default.
-- Custom answers are progressive: show a lightweight custom/add button first; reveal label and optional description inputs only after the user asks to customize.
-- A newly added custom answer immediately becomes selected and remains in the option area even if the user later selects another answer.
-- Edited option labels/descriptions persist in the field draft state when the user switches away and back.
-- Add-custom and edit-details are mutually exclusive inline panels.
-- Opening add-custom hides edit-details until the add panel is cancelled or completed. Opening edit-details hides add-custom until editing is done.
+- `single` and `multiple` use direct selection only. Do not show selected-answer editors.
+- Single and multiple choice fields always include a system `Other` option. Agents do not provide it; the UI adds it.
+- Selecting `Other` reveals a short answer input and submits the typed value as the selected answer label.
+- If `Other` is opened but the typed value is blank, it counts as no selected answer.
+- Ranking fields do not include `Other`.
 - Tooltips are secondary help, not the only place where option descriptions live.
-
-### Editable Answer Items
-
-- Label and description are editable separately only after the user opens details.
-- Description editors should be multiline to avoid hidden feedback.
-- Remove action is an icon button inside the item it affects, and it appears only when removal is allowed. Do not show disabled remove icons that look clickable but cannot act.
-- Do not show large selected-answer editors on initial render for `single` or `multiple`.
-- For `ranking`, sorting is part of answering and is available without entering edit mode. Edit mode means editing item labels/descriptions and removing items.
 
 ### Reset
 
 - A changed field shows a small reset icon.
-- Reset requires confirmation because it can discard human edits, custom options, and edited descriptions.
-- Reset restores both the answer and the field's local option draft state.
+- Reset requires confirmation because it can discard human edits, selected choices, notes, and ranking changes.
+- Reset restores the initial answer for that field.
 - Reserve header space for reset even when the icon is hidden. Reset appearing must not change the title row height or push field content.
 
 ### Ranking
 
 - Ranking items are always sortable through drag, keyboard sorting through the drag handle, and up/down buttons.
-- Edit-details mode exposes label and description inputs plus allowed remove actions. It does not own sorting.
-- Add-ranked-item uses the same progressive custom panel pattern as other choice fields and is mutually exclusive with edit-details.
+- Ranking items can be removed directly from the ranked list. Reset restores the initial ranking.
 - Rank number remains visible as a typographic gutter number. Do not render ranking numbers as bordered boxes, badges, pills, or input-like controls.
 - The actively dragged row must sit above neighboring rows visually.
 - On mobile, reorder actions remain aligned with the row header. Description text may wrap, but controls must not become large stacked blocks.
@@ -251,6 +241,8 @@ Primary document UI should not use visible shadows. Borders and spacing are the 
 - Do not repeat full "Agent suggests..." copy on every field.
 - Secret handling is indicated with a lock icon and hover/focus explanation.
 - Do not repeat full secret-handling copy beside every secret field.
+- Single, multiple, and ranking choice fields show a compact note textarea below the answer control so the human can explain a selection, reordering, or skipped answer.
+- Text fields do not get a separate note because the answer input itself can carry explanation.
 - Notes must never compete visually with the answer control.
 
 ### Validation Error
@@ -279,7 +271,7 @@ When validation fails:
 
 ### Group Collapse
 
-Groups can collapse to reduce complexity. Collapsed headers still show required progress. Collapsing must not hide validation recovery.
+Groups can collapse to reduce complexity. Collapsed headers still show answered progress. Collapsing must not hide validation recovery.
 
 ### Secret Fields
 
@@ -294,7 +286,7 @@ Required states:
 - Success: tells the user to return to the agent and does not show answer JSON.
 - Disabled: reduced opacity, cursor disabled, no hidden layout shift.
 - Validation failed: inline field errors plus automatic first-error reveal.
-- Partial: progress shows required answered count.
+- Partial: progress shows answered count.
 - Secret: lock icon plus local-file copy.
 - Submitted: no more editing in the page.
 
@@ -381,7 +373,7 @@ Before shipping a UI change:
 - Are simple ungrouped sessions clean without duplicate section chrome?
 - Are complex grouped sessions navigable without feeling like an admin sidebar?
 - Are field labels, placeholders, progress values, and buttons free from clipping?
-- Are defaults visibly editable?
+- Are defaults visibly marked and easy to change or clear?
 - Are secret fields explained without revealing content?
 - Does validation expand collapsed groups and point to the first issue?
 - Are loading, error, success, disabled, and validation states covered?

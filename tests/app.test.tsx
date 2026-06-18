@@ -11,40 +11,19 @@ import {
   type RemoteSessionPackage
 } from "../src/shared/cloud-protocol";
 
-const session: NormalizedSession = {
+const session: NormalizedSession = normalizeSession({
   title: "Need input",
-  groups: [
+  fields: [
+    { id: "notes", type: "text", label: "Notes" },
     {
-      id: "questions",
-      title: "Need input",
-      fields: [
-        {
-          id: "notes",
-          type: "text",
-          label: "Notes",
-          required: true,
-          multiline: false,
-          secret: false,
-          format: "plain"
-        },
-        {
-          id: "style",
-          type: "choice",
-          label: "Style",
-          required: true,
-          mode: "single",
-          options: [
-            { id: "simple", label: "Simple", value: "simple" },
-            { id: "complete", label: "Complete", value: "complete" }
-          ],
-          defaultItems: [],
-          allowCustom: true,
-          editable: true
-        }
-      ]
+      id: "style",
+      type: "choice",
+      label: "Style",
+      mode: "single",
+      options: ["Simple", "Complete"]
     }
   ]
-};
+});
 
 type CloudSessionMock = RemoteSessionPackage & {
   fetchMock: ReturnType<typeof vi.fn>;
@@ -113,284 +92,214 @@ describe("Loopmark UI", () => {
     expect(screen.queryByText(/^Loopmark$/)).not.toBeInTheDocument();
   });
 
-  it("loads a session, validates required fields, adds custom choice, and submits", async () => {
+  it("loads a session, ignores legacy required flags, captures choice notes, and submits Other", async () => {
     await renderCloudApp(session, {
       onAnswer: (payload, rawBody) => {
+        expect(payload.answers.notes).toEqual({
+          type: "text",
+          value: ""
+        });
         expect(payload.answers.style).toEqual({
           type: "choice",
-          items: [{ label: "Custom direction" }]
+          items: [{ label: "Custom direction" }],
+          note: "Need something outside the list."
         });
         expect(rawBody).not.toContain("Custom direction");
+        expect(rawBody).not.toContain("Need something outside the list.");
       }
     });
 
     const user = userEvent.setup();
 
     expect((await screen.findAllByText("Need input")).length).toBeGreaterThan(0);
-    await user.click(screen.getByRole("button", { name: /submit inputs/i }));
-    expect((await screen.findAllByText(/required question needs an answer/i)).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/required question needs an answer/i)).not.toBeInTheDocument();
 
-    await user.type(screen.getByLabelText(/Notes/), "Ship a polished v1");
-    expect(screen.queryByLabelText("Add custom answer label")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /Add custom answer/i }));
-    await user.type(screen.getByLabelText("Add custom answer label"), "Custom direction");
-    await user.click(screen.getByRole("button", { name: /^add$/i }));
-    expect(screen.getByRole("button", { name: /Custom direction/i })).toBeInTheDocument();
+    const styleField = within(document.querySelector("#field-style") as HTMLElement);
+    await user.click(styleField.getByRole("button", { name: "Other" }));
+    await user.type(styleField.getByLabelText("Other answer for Style"), "Custom direction");
+    await user.type(styleField.getByLabelText("Note for Style"), "Need something outside the list.");
     await user.click(screen.getByRole("button", { name: /submit inputs/i }));
 
     await waitFor(() => expect(screen.getByText("Inputs submitted")).toBeInTheDocument());
   });
 
-  it("expands a collapsed group when the first validation issue is inside it", async () => {
-    const groupedSession: NormalizedSession = {
+  it("submits a fully blank session even when legacy fields were marked required", async () => {
+    const groupedSession = normalizeSession({
       title: "Grouped review",
       groups: [
         {
-          id: "ready",
-          title: "Already answered",
-          fields: [
-            {
-              id: "summary",
-              type: "text",
-              label: "Summary",
-              required: false,
-              multiline: false,
-              secret: false,
-              format: "plain"
-            }
-          ]
-        },
-        {
           id: "blocked",
-          title: "Blocked section",
+          title: "Previously required section",
           fields: [
+            { id: "blocked_answer", type: "text", label: "Blocked answer", required: true },
             {
-              id: "blocked_answer",
-              type: "text",
-              label: "Blocked answer",
+              id: "blocked_choice",
+              type: "choice",
+              label: "Blocked choice",
               required: true,
-              multiline: false,
-              secret: false,
-              format: "plain"
+              mode: "single",
+              options: ["A"]
             }
           ]
         }
       ]
-    };
+    });
     await renderCloudApp(groupedSession);
 
     const user = userEvent.setup();
 
-    await screen.findByRole("button", { name: /Blocked section/i });
-    await user.click(screen.getByRole("button", { name: /Blocked section/i }));
+    await screen.findByRole("button", { name: /Previously required section/i });
+    await user.click(screen.getByRole("button", { name: /Previously required section/i }));
     expect(screen.queryByLabelText(/Blocked answer/)).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /submit inputs/i }));
 
-    await waitFor(() => expect(screen.getByLabelText(/Blocked answer/)).toBeInTheDocument());
-    expect(screen.getByText(/required question needs an answer/i)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("Inputs submitted")).toBeInTheDocument());
   });
 
-  it("keeps choice details collapsed until the user asks to edit them", async () => {
-    await renderCloudApp(session);
-
-    const user = userEvent.setup();
-
-    await screen.findByText("Style");
-    await user.click(screen.getByRole("button", { name: "Simple" }));
-
-    expect(screen.queryByText("Selected details")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /Add custom answer/i }));
-    expect(screen.queryByRole("button", { name: /Edit details/i })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /Cancel/i }));
-    await user.click(screen.getByRole("button", { name: /Edit details/i }));
-
-    expect(screen.getByText("Selected details")).toBeInTheDocument();
-    expect(screen.getByLabelText("Answer label 1")).toHaveValue("Simple");
-    expect(screen.queryByRole("button", { name: /Add custom answer/i })).not.toBeInTheDocument();
-  });
-
-  it("shows option descriptions before editing and hides unavailable remove actions", async () => {
-    const detailedSession: NormalizedSession = {
+  it("shows option descriptions directly and lets choices be cleared", async () => {
+    const detailedSession = normalizeSession({
       title: "Detailed choices",
-      groups: [
+      fields: [
         {
-          id: "questions",
-          title: "Detailed choices",
-          fields: [
-            {
-              id: "style",
-              type: "choice",
-              label: "Style",
-              required: true,
-              mode: "single",
-              options: [
-                {
-                  id: "paper",
-                  label: "Paper Trail",
-                  description: "Elegant document-like layout.",
-                  value: "paper"
-                }
-              ],
-              defaultItems: [
-                {
-                  id: "paper",
-                  label: "Paper Trail",
-                  description: "Elegant document-like layout.",
-                  value: "paper"
-                }
-              ],
-              allowCustom: true,
-              editable: true
-            }
-          ]
+          id: "style",
+          type: "choice",
+          label: "Style",
+          default: "Paper Trail",
+          options: [{ label: "Paper Trail", description: "Elegant document-like layout." }]
         }
       ]
-    };
+    });
     await renderCloudApp(detailedSession);
 
     const user = userEvent.setup();
 
     await screen.findByText("Elegant document-like layout.");
-    expect(screen.queryByText("Details")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Note for Style")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /Edit details/i }));
-
-    expect(screen.getByText("Selected details")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Remove Paper Trail/i })).not.toBeInTheDocument();
+    const option = screen.getByRole("button", { name: /Paper Trail/i });
+    expect(option).toHaveClass("bg-paper-accent");
+    await user.click(option);
+    expect(option).not.toHaveClass("bg-paper-accent");
   });
 
-  it("keeps custom options and edited descriptions when switching choices", async () => {
-    await renderCloudApp(session);
-
-    const user = userEvent.setup();
-
-    await screen.findByText("Style");
-    await user.click(screen.getByRole("button", { name: /Add custom answer/i }));
-    await user.type(screen.getByLabelText("Add custom answer label"), "Custom direction");
-    await user.type(screen.getByLabelText("Add custom answer description"), "Persist this custom answer.");
-    await user.click(screen.getByRole("button", { name: /^add$/i }));
-
-    await user.click(screen.getByRole("button", { name: "Complete" }));
-    expect(screen.getByRole("button", { name: /Custom direction/ })).toBeInTheDocument();
-    expect(screen.getByText("Persist this custom answer.")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Simple" }));
-    await user.click(screen.getByRole("button", { name: /Edit details/i }));
-    await user.clear(screen.getByLabelText("Answer description 1"));
-    await user.type(screen.getByLabelText("Answer description 1"), "Edited description survives switching.");
-    await user.click(screen.getByRole("button", { name: /Done editing/i }));
-    await user.click(screen.getByRole("button", { name: "Complete" }));
-
-    expect(screen.getByText("Edited description survives switching.")).toBeInTheDocument();
-  });
-
-  it("keeps ranking editors focused while labels change", async () => {
-    const rankingSession: NormalizedSession = {
-      title: "Ranking review",
-      groups: [
-        {
-          id: "questions",
-          title: "Ranking review",
-          fields: [
-            {
-              id: "priority",
-              type: "choice",
-              label: "Rank priorities",
-              required: true,
-              mode: "ranking",
-              options: [
-                { id: "alpha", label: "Alpha", value: "alpha" },
-                { id: "beta", label: "Beta", value: "beta" }
-              ],
-              defaultItems: [
-                { id: "alpha", label: "Alpha", value: "alpha" },
-                { id: "beta", label: "Beta", value: "beta" }
-              ],
-              allowCustom: true,
-              editable: true
-            }
-          ]
-        }
-      ]
-    };
-    await renderCloudApp(rankingSession);
-
-    const user = userEvent.setup();
-
-    await screen.findByText("Rank priorities");
-    await user.click(screen.getByRole("button", { name: "Edit details" }));
-    await user.click(screen.getByLabelText("Ranking label 1"));
-    await user.keyboard("X");
-
-    expect(screen.getByLabelText("Ranking label 1")).toHaveFocus();
-
-    await user.keyboard("Y");
-
-    expect(screen.getByLabelText("Ranking label 1")).toHaveValue("AlphaXY");
-  });
-
-  it("keeps choice and ranking labels read-only when custom answers are disabled", async () => {
-    const lockedSession = normalizeSession({
-      title: "Locked labels",
-      fields: [
-        {
-          id: "style",
-          type: "choice",
-          label: "Pick a style",
-          mode: "single",
-          allowCustom: false,
-          default: "Paper Trail",
-          options: [
-            { label: "Paper Trail", description: "Elegant document layout." },
-            { label: "Plain Form", description: "Minimal plain controls." }
-          ]
-        },
-        {
-          id: "priority",
-          type: "choice",
-          label: "Rank priorities",
-          mode: "ranking",
-          allowCustom: false,
-          options: [
-            { label: "Visual fidelity", description: "Match the selected design direction." },
-            { label: "Protocol clarity", description: "Keep the JSON compact." }
-          ]
-        }
-      ]
+  it("submits a choice note even after a selected option is cleared", async () => {
+    const noteSession = normalizeSession({
+      title: "Choice note",
+      fields: [{ id: "decision", label: "Decision", type: "choice", options: ["A", "B"] }]
     });
-    await renderCloudApp(lockedSession, {
-      onAnswer: (payload, rawBody) => {
-        expect(JSON.stringify(payload)).toContain("Updated style detail.");
-        expect(JSON.stringify(payload)).toContain("Updated ranking detail.");
-        expect(rawBody).not.toContain("Updated style detail.");
-        expect(rawBody).not.toContain("Updated ranking detail.");
+    await renderCloudApp(noteSession, {
+      onAnswer: (payload) => {
+        expect(payload.answers.decision).toEqual({
+          type: "choice",
+          items: null,
+          note: "I am skipping the choices for now."
+        });
       }
     });
 
     const user = userEvent.setup();
 
-    await screen.findByText("Pick a style");
+    await screen.findByText("Decision");
+    await user.type(screen.getByLabelText("Note for Decision"), "I am skipping the choices for now.");
+    const option = screen.getByRole("button", { name: "A" });
+    await user.click(option);
+    await user.click(option);
+    await user.click(screen.getByRole("button", { name: /submit inputs/i }));
+
+    await waitFor(() => expect(screen.getByText("Inputs submitted")).toBeInTheDocument());
+  });
+
+  it("treats a blank Other selection as no answer for single choice", async () => {
+    await renderCloudApp(session, {
+      onAnswer: (payload) => {
+        expect(payload.answers.style).toEqual({
+          type: "choice",
+          items: null
+        });
+      }
+    });
+
+    const user = userEvent.setup();
+
+    await screen.findByText("Style");
     const styleField = within(document.querySelector("#field-style") as HTMLElement);
-    await user.click(styleField.getByRole("button", { name: "Edit details" }));
-    expect(styleField.queryByLabelText("Answer label 1")).not.toBeInTheDocument();
-    const styleDescription = styleField.getByLabelText("Answer description 1");
-    await user.clear(styleDescription);
-    await user.click(styleDescription);
-    await user.paste("Updated style detail.");
-    await user.click(styleField.getByRole("button", { name: "Done editing" }));
+    const simpleOption = styleField.getByRole("button", { name: "Simple" });
+    await user.click(simpleOption);
+    expect(simpleOption).toHaveClass("bg-paper-accent");
 
+    await user.click(styleField.getByRole("button", { name: "Other" }));
+
+    expect(simpleOption).not.toHaveClass("bg-paper-accent");
+    expect(styleField.getByLabelText("Other answer for Style")).toHaveValue("");
+
+    await user.click(screen.getByRole("button", { name: /submit inputs/i }));
+
+    await waitFor(() => expect(screen.getByText("Inputs submitted")).toBeInTheDocument());
+  });
+
+  it("lets ranking items be removed without adding Other to ranking", async () => {
+    const rankingSession = normalizeSession({
+      title: "Ranking review",
+      fields: [
+        {
+          id: "priority",
+          type: "choice",
+          label: "Rank priorities",
+          mode: "ranking",
+          options: ["Alpha", "Beta"]
+        }
+      ]
+    });
+    await renderCloudApp(rankingSession, {
+      onAnswer: (payload) => {
+        expect(payload.answers.priority).toEqual({
+          type: "choice",
+          items: [{ label: "Beta" }]
+        });
+      }
+    });
+
+    const user = userEvent.setup();
+
+    await screen.findByText("Rank priorities");
     const priorityField = within(document.querySelector("#field-priority") as HTMLElement);
-    await user.click(priorityField.getByRole("button", { name: "Edit details" }));
-    expect(priorityField.queryByLabelText("Ranking label 1")).not.toBeInTheDocument();
-    const rankingDescription = priorityField.getByLabelText("Ranking description 1");
-    await user.clear(rankingDescription);
-    await user.click(rankingDescription);
-    await user.paste("Updated ranking detail.");
-    expect(rankingDescription).toHaveValue("Updated ranking detail.");
-    await user.click(priorityField.getByRole("button", { name: "Done editing" }));
-    expect(priorityField.getByText("Updated ranking detail.")).toBeInTheDocument();
+    expect(priorityField.queryByRole("button", { name: "Other" })).not.toBeInTheDocument();
 
+    await user.click(priorityField.getByRole("button", { name: "Remove Alpha" }));
+    expect(priorityField.queryByText("Alpha")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /submit inputs/i }));
+
+    await waitFor(() => expect(screen.getByText("Inputs submitted")).toBeInTheDocument());
+  });
+
+  it("submits notes for ranking questions", async () => {
+    const rankingSession = normalizeSession({
+      title: "Ranking review",
+      fields: [
+        {
+          id: "priority",
+          type: "choice",
+          label: "Rank priorities",
+          mode: "ranking",
+          options: ["Alpha", "Beta"]
+        }
+      ]
+    });
+    await renderCloudApp(rankingSession, {
+      onAnswer: (payload) => {
+        expect(payload.answers.priority).toEqual({
+          type: "choice",
+          items: [{ label: "Alpha" }, { label: "Beta" }],
+          note: "Alpha is first because it is lower risk."
+        });
+      }
+    });
+
+    const user = userEvent.setup();
+
+    await screen.findByText("Rank priorities");
+    await user.type(screen.getByLabelText("Note for Rank priorities"), "Alpha is first because it is lower risk.");
     await user.click(screen.getByRole("button", { name: /submit inputs/i }));
 
     await waitFor(() => expect(screen.getByText("Inputs submitted")).toBeInTheDocument());
@@ -481,22 +390,63 @@ describe("Loopmark UI", () => {
     expect(notes).toHaveValue("Keep this edit");
   });
 
-  it("resets custom choice drafts together with the choice answer", async () => {
+  it("resets Other input together with the choice answer", async () => {
     await renderCloudApp(session);
     vi.spyOn(window, "confirm").mockReturnValue(true);
 
     const user = userEvent.setup();
 
     await screen.findByText("Style");
-    await user.click(screen.getByRole("button", { name: /Add custom answer/i }));
-    await user.type(screen.getByLabelText("Add custom answer label"), "Temporary custom");
-    await user.click(screen.getByRole("button", { name: /^add$/i }));
-    expect(screen.getByRole("button", { name: /Temporary custom/i })).toBeInTheDocument();
+    const styleField = within(document.querySelector("#field-style") as HTMLElement);
+    await user.click(styleField.getByRole("button", { name: "Other" }));
+    await user.type(styleField.getByLabelText("Other answer for Style"), "Temporary answer");
+    expect(styleField.getByLabelText("Other answer for Style")).toHaveValue("Temporary answer");
 
     await user.click(screen.getByRole("button", { name: "Reset Style" }));
 
-    expect(screen.queryByRole("button", { name: /Temporary custom/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Edit details/i })).not.toBeInTheDocument();
+    expect(styleField.queryByLabelText("Other answer for Style")).not.toBeInTheDocument();
+    expect(styleField.getByRole("button", { name: "Other" })).not.toHaveClass("bg-paper-accent");
+  });
+
+  it("lets multiple choice use and clear Other alongside selected options", async () => {
+    const multipleSession = normalizeSession({
+      title: "Multiple choice",
+      fields: [
+        {
+          id: "scope",
+          label: "Scope",
+          type: "choice",
+          mode: "multiple",
+          options: ["A", "B"]
+        }
+      ]
+    });
+    await renderCloudApp(multipleSession);
+
+    const user = userEvent.setup();
+
+    await screen.findByText("Scope");
+    const scopeField = within(document.querySelector("#field-scope") as HTMLElement);
+    await user.click(scopeField.getByRole("button", { name: "A" }));
+    await user.click(scopeField.getByRole("button", { name: "Other" }));
+    const otherInput = scopeField.getByLabelText("Other answer for Scope");
+    await user.type(otherInput, "C");
+
+    expect(scopeField.getByRole("button", { name: "A" })).toHaveClass("bg-paper-accent");
+    expect(otherInput).toHaveValue("C");
+
+    await user.click(scopeField.getByRole("button", { name: "Other" }));
+    expect(scopeField.queryByLabelText("Other answer for Scope")).not.toBeInTheDocument();
+
+    await user.click(scopeField.getByRole("button", { name: "Other" }));
+    const reopenedOtherInput = scopeField.getByLabelText("Other answer for Scope");
+    await user.type(reopenedOtherInput, "C");
+
+    await user.click(scopeField.getByRole("button", { name: "A" }));
+    expect(scopeField.getByRole("button", { name: "A" })).not.toHaveClass("bg-paper-accent");
+
+    await user.clear(reopenedOtherInput);
+    expect(scopeField.queryByLabelText("Other answer for Scope")).not.toBeInTheDocument();
   });
 
   it("renders grouped descriptions and collapses grouped sections", async () => {
@@ -546,9 +496,9 @@ describe("Loopmark UI", () => {
 
     const option = await screen.findByRole("button", { name: "A" });
     await user.click(option);
-    expect(screen.getByRole("button", { name: /Edit details/i })).toBeInTheDocument();
+    expect(option).toHaveClass("bg-paper-accent");
     await user.click(option);
 
-    expect(screen.queryByRole("button", { name: /Edit details/i })).not.toBeInTheDocument();
+    expect(option).not.toHaveClass("bg-paper-accent");
   });
 });

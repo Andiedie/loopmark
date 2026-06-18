@@ -32,11 +32,16 @@ describe("final answer serialization", () => {
       answers: {
         notes: { type: "text", value: "  Ship it cleanly.  " },
         api_key: { type: "secret", value: "super-secret" },
-        style: { type: "choice", items: [{ label: "Simple", description: "Readable first." }] },
+        style: {
+          type: "choice",
+          items: [{ label: "Simple", description: "Readable first." }],
+          note: "This matches the audience."
+        },
         scope: { type: "choice", items: [{ label: "CLI" }, { label: "UI" }] },
         priority: {
           type: "choice",
-          items: [{ label: "Validation" }, { label: "UI", description: "Paper Trail implementation." }]
+          items: [{ label: "Validation" }, { label: "UI", description: "Paper Trail implementation." }],
+          note: "Validation should stay first."
         }
       }
     };
@@ -47,7 +52,8 @@ describe("final answer serialization", () => {
     expect(output.answers.notes).toEqual({ question: "Notes", answer: "Ship it cleanly." });
     expect(output.answers.style).toEqual({
       question: "Style",
-      answer: { label: "Simple", description: "Readable first." }
+      answer: { label: "Simple", description: "Readable first." },
+      note: "This matches the audience."
     });
     expect(output.answers.scope).toEqual({
       question: "Scope",
@@ -55,7 +61,8 @@ describe("final answer serialization", () => {
     });
     expect(output.answers.priority).toEqual({
       question: "Priority",
-      answer: [{ label: "Validation" }, { label: "UI", description: "Paper Trail implementation." }]
+      answer: [{ label: "Validation" }, { label: "UI", description: "Paper Trail implementation." }],
+      note: "Validation should stay first."
     });
 
     const secretAnswer = output.answers.api_key.answer as { secretFile: string; description: string };
@@ -78,14 +85,18 @@ describe("final answer serialization", () => {
       {
         answers: {
           notes: { type: "text", value: "   " },
-          choice: { type: "choice", items: [] }
+          choice: { type: "choice", items: [], note: "I am intentionally skipping this." }
         }
       },
       { secretDir: tempDir }
     );
 
     expect(output.answers.notes).toEqual({ question: "Notes", answer: null });
-    expect(output.answers.choice).toEqual({ question: "Choice", answer: null });
+    expect(output.answers.choice).toEqual({
+      question: "Choice",
+      answer: null,
+      note: "I am intentionally skipping this."
+    });
   });
 
   it("returns null for blank secret values and mismatched submitted answer types", async () => {

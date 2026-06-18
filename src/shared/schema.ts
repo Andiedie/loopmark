@@ -7,28 +7,23 @@ import {
 } from "./errors";
 
 export type ChoiceMode = "single" | "multiple" | "ranking";
-export type TextFormat = "plain" | "markdown" | "code";
 
 export type NormalizedChoiceItem = {
   id: string;
   label: string;
   description?: string;
-  value?: string;
-  custom?: true;
 };
 
 export type NormalizedFieldBase = {
   id: string;
   label: string;
   description?: string;
-  required: boolean;
 };
 
 export type NormalizedTextField = NormalizedFieldBase & {
   type: "text";
   multiline: boolean;
   secret: boolean;
-  format: TextFormat;
   default?: string;
 };
 
@@ -37,8 +32,6 @@ export type NormalizedChoiceField = NormalizedFieldBase & {
   mode: ChoiceMode;
   options: NormalizedChoiceItem[];
   defaultItems: NormalizedChoiceItem[];
-  allowCustom: boolean;
-  editable: boolean;
 };
 
 export type NormalizedField = NormalizedTextField | NormalizedChoiceField;
@@ -223,8 +216,7 @@ function normalizeField(field: RawField, path: string, errors: AgentValidationEr
   const base = {
     id: field.id,
     label: field.label,
-    description: cleanOptional(field.description),
-    required: field.required ?? false
+    description: cleanOptional(field.description)
   };
 
   if (type === "text") {
@@ -272,7 +264,6 @@ function normalizeField(field: RawField, path: string, errors: AgentValidationEr
       type: "text",
       multiline: field.multiline ?? false,
       secret: field.secret ?? false,
-      format: field.format ?? "plain",
       default: typeof field.default === "string" ? field.default : undefined
     };
   }
@@ -283,7 +274,7 @@ function normalizeField(field: RawField, path: string, errors: AgentValidationEr
         path: `${path}.options`,
         code: "missing_choice_options",
         message: "Choice fields must include at least one option.",
-        why: "Loopmark needs initial options before the user can select, edit, rank, or add custom feedback.",
+        why: "Loopmark needs initial options before the user can select or rank feedback.",
         fix: "Add an options array. Use strings for the shortest input JSON.",
         example: ["Simple first", "Complete architecture", "Ask me again later"]
       })
@@ -292,13 +283,11 @@ function normalizeField(field: RawField, path: string, errors: AgentValidationEr
 
   const options = normalizeOptions(field.options ?? [], `${path}.options`, errors);
   const mode = field.mode ?? "single";
-  const allowCustom = field.allowCustom ?? true;
   const defaultItems = normalizeDefaultItems({
     field,
     path,
     options,
     mode,
-    allowCustom,
     errors
   });
 
@@ -307,9 +296,7 @@ function normalizeField(field: RawField, path: string, errors: AgentValidationEr
     type: "choice",
     mode,
     options,
-    defaultItems,
-    allowCustom,
-    editable: field.editable ?? true
+    defaultItems
   };
 }
 
@@ -318,16 +305,14 @@ function normalizeOptions(
   path: string,
   errors: AgentValidationError[]
 ): NormalizedChoiceItem[] {
-  const seenValues = new Set<string>();
   const seenLabels = new Set<string>();
 
   return options.map((option, index) => {
     const item =
       typeof option === "string"
-        ? { id: `option_${index + 1}`, label: option, value: option }
+        ? { id: `option_${index + 1}`, label: option }
         : {
-            id: option.value ?? `option_${index + 1}`,
-            value: option.value,
+            id: `option_${index + 1}`,
             label: option.label,
             description: cleanOptional(option.description)
           };
@@ -346,22 +331,6 @@ function normalizeOptions(
     }
     seenLabels.add(item.label);
 
-    if (item.value) {
-      if (seenValues.has(item.value)) {
-        errors.push(
-          makeError({
-            path: `${path}[${index}].value`,
-            code: "duplicate_option_value",
-            message: "Choice option value must be unique.",
-            why: "The UI uses values to match agent defaults to stable options.",
-            fix: "Change this option value to a unique string, or omit value and rely on the label.",
-            example: `${item.value}_${index + 1}`
-          })
-        );
-      }
-      seenValues.add(item.value);
-    }
-
     return item;
   });
 }
@@ -371,10 +340,9 @@ function normalizeDefaultItems(input: {
   path: string;
   options: NormalizedChoiceItem[];
   mode: ChoiceMode;
-  allowCustom: boolean;
   errors: AgentValidationError[];
 }): NormalizedChoiceItem[] {
-  const { field, path, options, mode, allowCustom, errors } = input;
+  const { field, path, options, mode, errors } = input;
 
   if (field.default === undefined) {
     return mode === "ranking" ? options : [];
@@ -395,7 +363,7 @@ function normalizeDefaultItems(input: {
       return [];
     }
 
-    const item = normalizeDefaultItem(field.default, options, allowCustom, `${path}.default`, errors);
+    const item = normalizeDefaultItem(field.default, options, `${path}.default`, errors);
     return item ? [item] : [];
   }
 
@@ -406,7 +374,7 @@ function normalizeDefaultItems(input: {
         code: "invalid_list_default",
         message: `${mode} choice default must be an array.`,
         why: "Multiple and ranking choices can recommend several items.",
-        fix: "Use an array of option values, labels, or option-like objects.",
+        fix: "Use an array of option labels or option-like objects.",
         example: ["Schema validation", "CLI lifecycle"]
       })
     );
@@ -416,7 +384,7 @@ function normalizeDefaultItems(input: {
   const defaultItems = field.default
     .map((item, index) => ({
       index,
-      item: normalizeDefaultItem(item, options, allowCustom, `${path}.default[${index}]`, errors)
+      item: normalizeDefaultItem(item, options, `${path}.default[${index}]`, errors)
     }))
     .filter((entry): entry is { index: number; item: NormalizedChoiceItem } => Boolean(entry.item));
 
@@ -427,7 +395,6 @@ function normalizeDefaultItems(input: {
 function normalizeDefaultItem(
   value: unknown,
   options: NormalizedChoiceItem[],
-  allowCustom: boolean,
   path: string,
   errors: AgentValidationError[]
 ): NormalizedChoiceItem | null {
@@ -441,20 +408,16 @@ function normalizeDefaultItem(
           code: "invalid_default_item",
           message: "Default item must not be empty.",
           why: "Empty default items would render as blank recommendations and serialize to no answer.",
-          fix: "Use an existing option label/value, a custom non-empty string, or remove this default item.",
-          example: options[0]?.value ?? options[0]?.label ?? "Existing option"
+          fix: "Use an existing option label, or remove this default item.",
+          example: options[0]?.label ?? "Existing option"
         })
       );
       return null;
     }
 
-    const matched = options.find((option) => option.value === label || option.label === label);
+    const matched = options.find((option) => option.label === label);
     if (matched) {
       return matched;
-    }
-
-    if (allowCustom) {
-      return { id: `custom_${slug(label)}`, label, custom: true };
     }
 
     errors.push(
@@ -462,9 +425,9 @@ function normalizeDefaultItem(
         path,
         code: "unknown_default_option",
         message: "Default does not match any option.",
-        why: "Custom options are disabled for this field, so the default must point to an existing option.",
-        fix: "Use one of the option labels or values, or set allowCustom to true.",
-        example: options[0]?.value ?? options[0]?.label ?? "Existing option"
+        why: "Choice defaults must point to an option the agent provided.",
+        fix: "Use one of the option labels, or remove the default.",
+        example: options[0]?.label ?? "Existing option"
       })
     );
     return null;
@@ -489,26 +452,17 @@ function normalizeDefaultItem(
       };
     }
 
-    if (!allowCustom) {
-      errors.push(
-        makeError({
-          path,
-          code: "unknown_default_option",
-          message: "Default does not match any option.",
-          why: "Custom options are disabled for this field, so the default must point to an existing option.",
-          fix: "Use one of the option labels, or set allowCustom to true.",
-          example: options[0]?.label ?? "Existing option"
-        })
-      );
-      return null;
-    }
-
-    return {
-      id: `custom_${slug(objectResult.data.label)}`,
-      label: objectResult.data.label,
-      ...(description ? { description } : {}),
-      custom: true
-    };
+    errors.push(
+      makeError({
+        path,
+        code: "unknown_default_option",
+        message: "Default does not match any option.",
+        why: "Choice defaults must point to an option the agent provided.",
+        fix: "Use one of the option labels, or remove the default.",
+        example: options[0]?.label ?? "Existing option"
+      })
+    );
+    return null;
   }
 
   errors.push(
@@ -614,13 +568,4 @@ function cleanOptional(value: string | undefined): string | undefined {
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
-}
-
-function slug(input: string): string {
-  return input
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/gi, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 40);
 }

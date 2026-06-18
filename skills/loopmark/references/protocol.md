@@ -113,6 +113,8 @@ Grouped sessions use:
 
 Field ids must be unique across the whole session. Prefer stable `snake_case` ids because final answers are keyed by id.
 
+All fields are optional.
+
 ## Text Fields
 
 Text fields are the default field type:
@@ -122,18 +124,14 @@ Text fields are the default field type:
   "id": "context",
   "label": "What context should I preserve?",
   "type": "text",
-  "required": true,
   "multiline": true,
-  "format": "markdown",
   "default": "Keep the implementation small and package-compatible."
 }
 ```
 
 Supported text keys:
 
-- `required`: require a non-empty answer.
 - `multiline`: render a textarea.
-- `format`: `plain`, `markdown`, or `code`.
 - `default`: string only.
 - `secret`: write the submitted value to a local temporary file during collection instead of stdout.
 
@@ -160,7 +158,6 @@ Choice fields require a non-empty `options` array:
   "label": "Which direction should I implement?",
   "type": "choice",
   "mode": "single",
-  "required": true,
   "default": "Smallest compatible package change",
   "options": [
     {
@@ -178,12 +175,16 @@ Choice fields require a non-empty `options` array:
 Supported choice keys:
 
 - `mode`: `single`, `multiple`, or `ranking`; defaults to `single`.
-- `options`: strings or `{ "value", "label", "description" }` objects.
+- `options`: strings or `{ "label", "description" }` objects.
 - `default`: string or `{ "label", "description" }` for `single`; array for `multiple` and `ranking`.
-- `allowCustom`: defaults to `true`.
-- `editable`: defaults to `true`.
+
+Choice defaults must match existing option labels. Use object defaults only when you want to keep the option label and override the default answer description.
+
+For `single` and `multiple` choice fields, Loopmark always adds a system `Other` option. Do not include `Other` yourself. When the human selects `Other`, Loopmark reveals an input and returns the typed value as the selected answer label. If the input is empty, no `Other` answer is submitted.
 
 For `ranking` fields with no explicit default, Loopmark initially ranks all options in the provided order.
+
+Single, multiple, and ranking choice fields also include a note textarea in the fill page. The human can explain why they chose an option, why they reordered items, or why they skipped the question.
 
 ## Submitted Output Shape
 
@@ -209,6 +210,18 @@ Single choice answers are one object or `null`:
 ```
 
 Multiple and ranking choice answers are arrays or `null`. Ranking order is the returned array order.
+
+Choice answers may include a `note` string:
+
+```json
+{
+  "question": "Which direction should I implement?",
+  "answer": {
+    "label": "Smallest compatible package change"
+  },
+  "note": "This keeps the change small enough to review today."
+}
+```
 
 Secret answers return a file pointer, not the secret value:
 
@@ -236,7 +249,7 @@ Invalid input exits non-zero and writes an agent-readable report to stderr:
       "path": "fields[0].options",
       "code": "missing_choice_options",
       "message": "Choice fields must include at least one option.",
-      "why": "Loopmark needs initial options before the user can select, edit, rank, or add custom feedback.",
+      "why": "Loopmark needs initial options before the user can select or rank feedback.",
       "fix": "Add an options array. Use strings for the shortest input JSON.",
       "example": ["Simple first", "Complete architecture"]
     }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   closestCenter,
   DndContext,
@@ -27,8 +27,6 @@ import {
   GripVertical,
   Loader2,
   Lock,
-  Pencil,
-  Plus,
   RotateCcw,
   Sparkles,
   X
@@ -36,8 +34,9 @@ import {
 import type { NormalizedChoiceField, NormalizedField, NormalizedGroup, NormalizedSession } from "../shared/schema";
 import {
   getInitialAnswer,
-  isAnswerComplete,
+  isAnswerPresent,
   normalizeChoiceItems,
+  normalizeTextAnswer,
   toAnswerItem,
   type ChoiceAnswerItem,
   type SubmittedAnswer
@@ -58,15 +57,9 @@ import { cn } from "../lib/utils";
 
 type AnswerState = Record<string, SubmittedAnswer>;
 type FieldErrors = Record<string, string | undefined>;
-type ChoiceDraftState = Record<string, ChoiceOptionDraft[]>;
-type ChoiceOptionDraft = ChoiceAnswerItem & {
-  key: string;
-  custom?: true;
-};
 type RankingItemDraft = ChoiceAnswerItem & {
   key: string;
 };
-type ChoicePanel = "custom" | "details" | null;
 type RemoteSessionState = {
   sessionId: string;
   session: NormalizedSession;
@@ -93,7 +86,7 @@ export function App() {
   const sessionCode = useMemo(() => extractSessionCodeFromHash(window.location.hash), []);
   const [remoteSession, setRemoteSession] = useState<RemoteSessionState | null>(null);
   const [answers, setAnswers] = useState<AnswerState>({});
-  const [choiceDrafts, setChoiceDrafts] = useState<ChoiceDraftState>({});
+  const [fieldResetVersions, setFieldResetVersions] = useState<Record<string, number>>({});
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [loadError, setLoadError] = useState<string | null>(
@@ -120,7 +113,6 @@ export function App() {
 
         setRemoteSession(loadedSession);
         setAnswers(createInitialAnswers(loadedSession.session));
-        setChoiceDrafts(createInitialChoiceDrafts(loadedSession.session));
       })
       .catch((error) => {
         if (alive) {
@@ -139,14 +131,12 @@ export function App() {
 
   const progress = useMemo(() => {
     if (!session) {
-      return { required: 0, complete: 0, total: 0 };
+      return { answered: 0, total: 0 };
     }
 
     const fields = flattenGroups(session.groups);
-    const required = fields.filter((field) => field.required);
     return {
-      required: required.length,
-      complete: required.filter((field) => isAnswerComplete(field, answers[field.id])).length,
+      answered: fields.filter((field) => isAnswerPresent(field, answers[field.id])).length,
       total: fields.length
     };
   }, [answers, session]);
@@ -159,7 +149,7 @@ export function App() {
     return <MessageScreen title="Loading Loopmark" message="Decrypting the input page." loading />;
   }
 
-  const percent = progress.required === 0 ? 100 : Math.round((progress.complete / progress.required) * 100);
+  const percent = progress.total === 0 ? 100 : Math.round((progress.answered / progress.total) * 100);
   const isUngroupedSession =
     session.groups.length === 1 && session.groups[0].id === "questions" && session.groups[0].title === session.title;
   const hasFieldErrors = Object.values(fieldErrors).some(Boolean);
@@ -167,10 +157,6 @@ export function App() {
   function updateAnswer(fieldId: string, answer: SubmittedAnswer) {
     setAnswers((current) => ({ ...current, [fieldId]: answer }));
     setFieldErrors((current) => ({ ...current, [fieldId]: undefined }));
-  }
-
-  function updateChoiceDrafts(fieldId: string, drafts: ChoiceOptionDraft[]) {
-    setChoiceDrafts((current) => ({ ...current, [fieldId]: drafts }));
   }
 
   function resetField(field: NormalizedField) {
@@ -181,9 +167,7 @@ export function App() {
 
     setAnswers((current) => ({ ...current, [field.id]: getInitialAnswer(field) }));
     setFieldErrors((current) => ({ ...current, [field.id]: undefined }));
-    if (field.type === "choice") {
-      setChoiceDrafts((current) => ({ ...current, [field.id]: createInitialChoiceDraftsForField(field) }));
-    }
+    setFieldResetVersions((current) => ({ ...current, [field.id]: (current[field.id] ?? 0) + 1 }));
   }
 
   function toggleGroup(groupId: string) {
@@ -280,7 +264,7 @@ export function App() {
           <div className="w-full md:w-80">
             <div className="flex items-center justify-between gap-4 text-sm text-paper-muted">
               <span className="whitespace-nowrap">
-                {progress.complete} / {progress.required} required answered
+                {progress.answered} / {progress.total} answered
               </span>
               <span className="whitespace-nowrap tabular-nums">{percent}%</span>
             </div>
@@ -345,10 +329,9 @@ export function App() {
                           first={fieldIndex === 0}
                           answer={answers[field.id]}
                           error={fieldErrors[field.id]}
-                          dirty={isFieldDirty(field, answers[field.id], choiceDrafts[field.id])}
-                          choiceDrafts={field.type === "choice" ? choiceDrafts[field.id] : undefined}
+                          dirty={isFieldDirty(field, answers[field.id])}
+                          resetVersion={fieldResetVersions[field.id] ?? 0}
                           onChange={(answer) => updateAnswer(field.id, answer)}
-                          onChoiceDraftsChange={(drafts) => updateChoiceDrafts(field.id, drafts)}
                           onReset={() => resetField(field)}
                         />
                       ))}
@@ -396,10 +379,9 @@ export function App() {
                           first={fieldIndex === 0}
                           answer={answers[field.id]}
                           error={fieldErrors[field.id]}
-                          dirty={isFieldDirty(field, answers[field.id], choiceDrafts[field.id])}
-                          choiceDrafts={field.type === "choice" ? choiceDrafts[field.id] : undefined}
+                          dirty={isFieldDirty(field, answers[field.id])}
+                          resetVersion={fieldResetVersions[field.id] ?? 0}
                           onChange={(answer) => updateAnswer(field.id, answer)}
-                          onChoiceDraftsChange={(drafts) => updateChoiceDrafts(field.id, drafts)}
                           onReset={() => resetField(field)}
                         />
                       ))}
@@ -451,24 +433,18 @@ function FieldBlock(input: {
   answer: SubmittedAnswer | undefined;
   error?: string;
   dirty: boolean;
-  choiceDrafts?: ChoiceOptionDraft[];
+  resetVersion: number;
   onChange: (answer: SubmittedAnswer) => void;
-  onChoiceDraftsChange: (drafts: ChoiceOptionDraft[]) => void;
   onReset: () => void;
 }) {
-  const { field, index, simple, first, answer, error, dirty, choiceDrafts, onChange, onChoiceDraftsChange, onReset } = input;
+  const { field, index, simple, first, answer, error, dirty, resetVersion, onChange, onReset } = input;
   const suggestionActive = isDefaultSuggestionActive(field, answer);
   const hasStatusSlot = (field.type === "text" && field.secret) || hasDefaultSuggestion(field);
   const statusIcon = field.type === "text" && field.secret ? <SecretHint /> : suggestionActive ? <SuggestionHint /> : null;
   const labelId = `field-${field.id}-label`;
   const errorId = error ? `field-${field.id}-error` : undefined;
   const describedBy = errorId;
-  const labelText = (
-    <>
-      {field.label}
-      {field.required ? <span className="ml-1 text-paper-danger">*</span> : null}
-    </>
-  );
+  const labelText = field.label;
 
   return (
     <article
@@ -518,14 +494,13 @@ function FieldBlock(input: {
             <TextField field={field} answer={answer} onChange={onChange} invalid={Boolean(error)} describedBy={describedBy} />
           ) : (
             <ChoiceField
+              key={resetVersion}
               field={field}
               answer={answer}
               onChange={onChange}
               invalid={Boolean(error)}
               labelledBy={labelId}
               describedBy={describedBy}
-              drafts={choiceDrafts ?? createInitialChoiceDraftsForField(field)}
-              onDraftsChange={onChoiceDraftsChange}
             />
           )}
         </div>
@@ -610,33 +585,40 @@ function ChoiceField(input: {
   invalid: boolean;
   labelledBy: string;
   describedBy?: string;
-  drafts: ChoiceOptionDraft[];
-  onDraftsChange: (drafts: ChoiceOptionDraft[]) => void;
   onChange: (answer: SubmittedAnswer) => void;
 }) {
-  const { field, answer, invalid, labelledBy, describedBy, drafts, onDraftsChange, onChange } = input;
+  const { field, answer, invalid, labelledBy, describedBy, onChange } = input;
+  const options = field.options.map(toAnswerItem);
   const selected = answer?.type === "choice" ? liveChoiceItems(answer.items) : [];
-  const [panel, setPanel] = useState<ChoicePanel>(null);
-  const selectedDrafts = selected
-    .map((item) => findDraftForAnswer(drafts, item) ?? answerItemToDraft(item, `selected_${item.label}`))
-    .filter((item) => item.label.trim().length > 0);
+  const note = answer?.type === "choice" ? answer.note ?? "" : "";
+  const otherItem = findOtherChoiceItem(selected, options);
+  const [otherOpen, setOtherOpen] = useState(Boolean(otherItem));
+  const [otherLabel, setOtherLabel] = useState(otherItem?.label ?? "");
+  const otherActive = Boolean(otherItem) || otherOpen;
 
   function setItems(items: ChoiceAnswerItem[] | null) {
-    if ((!items || items.length === 0) && panel === "details") {
-      setPanel(null);
-    }
-    onChange({ type: "choice", items });
+    onChange({ type: "choice", items, ...(note !== "" ? { note } : {}) });
   }
 
   function setCleanItems(items: ChoiceAnswerItem[]) {
     setItems(items.length > 0 ? items : null);
   }
 
+  function setNote(nextNote: string) {
+    onChange({
+      type: "choice",
+      items: selected.length > 0 ? selected : null,
+      ...(nextNote !== "" ? { note: nextNote } : {})
+    });
+  }
+
   function selectOption(item: ChoiceAnswerItem) {
     const active = selected.some((selectedItem) => choiceLabelsMatch(selectedItem, item));
 
     if (field.mode === "single") {
-      if (active && !field.required) {
+      setOtherOpen(false);
+      setOtherLabel("");
+      if (active) {
         setItems(null);
         return;
       }
@@ -648,77 +630,76 @@ function ChoiceField(input: {
     setCleanItems(active ? selected.filter((selectedItem) => !choiceLabelsMatch(selectedItem, item)) : [...selected, item]);
   }
 
-  function addDraft(item: ChoiceAnswerItem) {
-    const draft = answerItemToDraft(item, `custom_${drafts.length + 1}`, true);
-    onDraftsChange([...drafts, draft]);
-    setItems(field.mode === "single" ? [toAnswerItem(draft)] : [...selected, toAnswerItem(draft)]);
-    setPanel(null);
-  }
-
-  function updateSelectedDraft(key: string, nextItem: ChoiceAnswerItem) {
-    const previous = drafts.find((draft) => draft.key === key);
-    const nextDraft = makeChoiceDraft(key, nextItem, previous?.custom);
-    const nextDrafts = drafts.map((draft) => (draft.key === key ? nextDraft : draft));
-    onDraftsChange(nextDrafts);
-    setCleanItems(
-      selected.map((item) => (previous && choiceLabelsMatch(item, previous) ? toAnswerItem(nextDraft) : item))
-    );
-  }
-
-  function unselectDraft(key: string) {
-    const draft = drafts.find((candidate) => candidate.key === key);
-    if (!draft) {
+  function toggleOther() {
+    if (otherActive) {
+      setOtherOpen(false);
+      setOtherLabel("");
+      setCleanItems(selected.filter((item) => !isOtherChoiceItem(item, options)));
       return;
     }
-    setCleanItems(selected.filter((item) => !choiceLabelsMatch(item, draft)));
+
+    setOtherOpen(true);
+    if (field.mode === "single") {
+      setItems(null);
+    }
+  }
+
+  function setOtherValue(value: string) {
+    setOtherLabel(value);
+    const label = value.trim();
+    const withoutOther = selected.filter((item) => !isOtherChoiceItem(item, options));
+
+    if (label.length === 0) {
+      setOtherOpen(false);
+      setOtherLabel("");
+      setCleanItems(withoutOther);
+      return;
+    }
+
+    const nextOther = { label };
+    setItems(field.mode === "single" ? [nextOther] : [...withoutOther, nextOther]);
   }
 
   if (field.mode === "ranking") {
-    return <RankingChoice field={field} items={selected} setItems={setItems} invalid={invalid} />;
+    return (
+      <div className="flex flex-col gap-4" role="group" aria-labelledby={labelledBy} aria-describedby={describedBy} aria-invalid={invalid}>
+        <RankingChoice items={selected} setItems={setItems} invalid={invalid} />
+        <ChoiceNote field={field} value={note} onChange={setNote} />
+      </div>
+    );
   }
 
   return (
     <div className="flex flex-col gap-4" role="group" aria-labelledby={labelledBy} aria-describedby={describedBy} aria-invalid={invalid}>
       <div className="grid gap-2" data-testid={`choice-options-${field.id}`}>
-        {drafts.map((option) => {
+        {options.map((option, index) => {
           const active = selected.some((item) => choiceLabelsMatch(item, option));
           return (
             <ChoiceOptionButton
-              key={option.key}
+              key={`${field.options[index]?.id ?? index}-${option.label}`}
               item={option}
               active={active}
-              custom={option.custom}
               onClick={() => selectOption(toAnswerItem(option))}
             />
           );
         })}
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        {field.allowCustom && panel !== "details" ? (
-          <CustomChoiceInput
-            open={panel === "custom"}
-            onOpen={() => setPanel(panel === "custom" ? null : "custom")}
-            onCancel={() => setPanel(null)}
-            onAdd={addDraft}
-            label="Add custom answer"
-          />
-        ) : null}
-        {field.editable && selected.length > 0 && panel !== "custom" ? (
-          <Button type="button" variant="ghost" size="sm" onClick={() => setPanel(panel === "details" ? null : "details")}>
-            {panel === "details" ? <Check aria-hidden /> : <Pencil aria-hidden />}
-            {panel === "details" ? "Done editing" : "Edit details"}
-          </Button>
-        ) : null}
-      </div>
-      {field.editable && panel === "details" && selectedDrafts.length > 0 ? (
-        <ChoiceDetailsEditor
-          items={selectedDrafts}
-          onChange={updateSelectedDraft}
-          onRemove={unselectDraft}
-          canRemove={!field.required || selected.length > 1}
-          canEditLabel={field.allowCustom}
+        <ChoiceOptionButton
+          item={{ label: "Other" }}
+          active={otherActive}
+          onClick={toggleOther}
         />
-      ) : null}
+        {otherOpen ? (
+          <div className="border-l border-paper-line pl-4">
+            <Input
+              aria-label={`Other answer for ${field.label}`}
+              placeholder="Type another answer"
+              value={otherLabel}
+              onChange={(event) => setOtherValue(event.target.value)}
+            />
+          </div>
+        ) : null}
+      </div>
+      <ChoiceNote field={field} value={note} onChange={setNote} />
     </div>
   );
 }
@@ -726,10 +707,9 @@ function ChoiceField(input: {
 function ChoiceOptionButton(input: {
   item: Pick<ChoiceAnswerItem, "label" | "description">;
   active: boolean;
-  custom?: boolean;
   onClick: () => void;
 }) {
-  const { item, active, custom = false, onClick } = input;
+  const { item, active, onClick } = input;
 
   return (
     <button
@@ -745,103 +725,53 @@ function ChoiceOptionButton(input: {
     >
       <span className="flex h-6 items-center pt-0.5">{active ? <Check aria-hidden className="size-4" /> : <span className="size-4" />}</span>
       <span className="min-w-0">
-        <span className="block font-medium leading-6">
-          {item.label}
-          {custom ? <span className="ml-2 text-xs font-normal opacity-75">Custom</span> : null}
-        </span>
+        <span className="block font-medium leading-6">{item.label}</span>
         {item.description ? <span className="mt-1 block text-xs leading-5 opacity-80">{item.description}</span> : null}
       </span>
     </button>
   );
 }
 
-function ChoiceDetailsEditor(input: {
-  items: ChoiceOptionDraft[];
-  onChange: (key: string, item: ChoiceAnswerItem) => void;
-  onRemove: (key: string) => void;
-  canRemove: boolean;
-  canEditLabel: boolean;
+function ChoiceNote(input: {
+  field: NormalizedChoiceField;
+  value: string;
+  onChange: (value: string) => void;
 }) {
-  const { items, onChange, onRemove, canRemove, canEditLabel } = input;
+  const { field, value, onChange } = input;
+  const id = `${field.id}-note`;
 
   return (
-    <div className="flex max-w-3xl flex-col gap-3 border-l border-paper-line pl-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-paper-muted">Selected details</p>
-      {items.map((item, index) => (
-        <div key={item.key} className="grid gap-2 border border-paper-line bg-white p-3">
-          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-            {canEditLabel ? (
-              <Input
-                aria-label={`Answer label ${index + 1}`}
-                value={item.label}
-                onChange={(event) => onChange(item.key, { ...item, label: event.target.value })}
-              />
-            ) : (
-              <p className="min-h-9 py-1.5 text-sm font-medium leading-6 text-paper-ink">{item.label}</p>
-            )}
-            {canRemove ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label={`Remove ${item.label}`}
-                onClick={() => onRemove(item.key)}
-              >
-                <X aria-hidden />
-              </Button>
-            ) : null}
-          </div>
-          <Textarea
-            aria-label={`Answer description ${index + 1}`}
-            placeholder="Optional description"
-            rows={2}
-            className="min-h-16 resize-y py-1.5 leading-5"
-            value={item.description ?? ""}
-            onChange={(event) => onChange(item.key, { ...item, description: event.target.value || undefined })}
-          />
-        </div>
-      ))}
+    <div className="max-w-3xl">
+      <label htmlFor={id} className="text-xs font-semibold uppercase tracking-[0.14em] text-paper-muted">
+        Note
+      </label>
+      <Textarea
+        id={id}
+        aria-label={`Note for ${field.label}`}
+        placeholder="Why this answer, or why you skipped it"
+        rows={3}
+        className="mt-2 min-h-20 resize-y py-2 leading-5"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
     </div>
   );
 }
 
 function RankingChoice(input: {
-  field: NormalizedChoiceField;
   items: ChoiceAnswerItem[];
   setItems: (items: ChoiceAnswerItem[] | null) => void;
   invalid: boolean;
 }) {
-  const { field, items, setItems, invalid } = input;
-  const [panel, setPanel] = useState<ChoicePanel>(null);
-  const [rows, setRows] = useState<RankingItemDraft[]>(() => createRankingDrafts(items));
-  const nextKeyIndex = useRef(rows.length + 1);
-  const editingDetails = panel === "details";
+  const { items, setItems, invalid } = input;
+  const rows = useMemo(() => createRankingDrafts(items), [items]);
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(TextInputSafeKeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  useEffect(() => {
-    setRows((current) => {
-      if (choiceItemListsEqual(current.map(toAnswerItem), items)) {
-        return current;
-      }
-
-      const reconciled = reconcileRankingDrafts(items, current);
-      nextKeyIndex.current = Math.max(nextKeyIndex.current, reconciled.length + 1);
-      return reconciled;
-    });
-  }, [items]);
-
   function commitRows(nextRows: RankingItemDraft[]) {
-    setRows(nextRows);
-    setItems(nextRows.map(toAnswerItem));
-  }
-
-  function createNextRankingKey() {
-    const key = `ranking_custom_${nextKeyIndex.current}`;
-    nextKeyIndex.current += 1;
-    return key;
+    setItems(nextRows.length > 0 ? nextRows.map(toAnswerItem) : null);
   }
 
   function onDragEnd(event: DragEndEvent) {
@@ -871,64 +801,23 @@ function RankingChoice(input: {
 
   return (
     <div className="flex flex-col gap-4" aria-invalid={invalid}>
-      {editingDetails ? (
-        <div className="flex flex-col gap-2">
-          {rows.map((row, index) => (
-            <EditableRankingItem
-              key={row.key}
-              item={row}
-              index={index}
-              itemCount={rows.length}
-              canEditLabel={field.allowCustom}
-              canRemove={field.editable && (!field.required || rows.length > 1)}
-              onMove={move}
-              onRemove={() => commitRows(rows.filter((_, itemIndex) => itemIndex !== index))}
-              onChange={(nextItem) => {
-                const next = [...rows];
-                next[index] = { ...nextItem, key: row.key };
-                commitRows(next);
-              }}
-            />
-          ))}
-        </div>
-      ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-          <SortableContext items={rows.map((row) => row.key)} strategy={verticalListSortingStrategy}>
-            <div className="flex flex-col gap-2">
-              {rows.map((row, index) => (
-                <SortableRankingItem
-                  key={row.key}
-                  sortableId={row.key}
-                  item={row}
-                  index={index}
-                  itemCount={rows.length}
-                  onMove={move}
-                />
-              ))}
-            </div>
-          </SortableContext>
-        </DndContext>
-      )}
-      <div className="flex flex-wrap items-center gap-2">
-        {field.allowCustom && panel !== "details" ? (
-          <CustomChoiceInput
-            open={panel === "custom"}
-            onOpen={() => setPanel(panel === "custom" ? null : "custom")}
-            onCancel={() => setPanel(null)}
-            onAdd={(item) => {
-              commitRows([...rows, { ...item, key: createNextRankingKey() }]);
-              setPanel(null);
-            }}
-            label="Add ranked item"
-          />
-        ) : null}
-        {field.editable && rows.length > 0 && panel !== "custom" ? (
-          <Button type="button" variant="ghost" size="sm" onClick={() => setPanel(panel === "details" ? null : "details")}>
-            {panel === "details" ? <Check aria-hidden /> : <Pencil aria-hidden />}
-            {panel === "details" ? "Done editing" : "Edit details"}
-          </Button>
-        ) : null}
-      </div>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+        <SortableContext items={rows.map((row) => row.key)} strategy={verticalListSortingStrategy}>
+          <div className="flex flex-col gap-2">
+            {rows.map((row, index) => (
+              <SortableRankingItem
+                key={row.key}
+                sortableId={row.key}
+                item={row}
+                index={index}
+                itemCount={rows.length}
+                onMove={move}
+                onRemove={() => commitRows(rows.filter((_, itemIndex) => itemIndex !== index))}
+              />
+            ))}
+          </div>
+        </SortableContext>
+      </DndContext>
     </div>
   );
 }
@@ -939,8 +828,9 @@ function SortableRankingItem(input: {
   index: number;
   itemCount: number;
   onMove: (index: number, direction: -1 | 1) => void;
+  onRemove: () => void;
 }) {
-  const { sortableId, item, index, itemCount, onMove } = input;
+  const { sortableId, item, index, itemCount, onMove, onRemove } = input;
   const { attributes, isDragging, listeners, setNodeRef, transform, transition } = useSortable({ id: sortableId });
 
   return (
@@ -997,155 +887,15 @@ function SortableRankingItem(input: {
         >
           <ArrowDown aria-hidden />
         </Button>
-      </div>
-    </div>
-  );
-}
-
-function EditableRankingItem(input: {
-  item: ChoiceAnswerItem;
-  index: number;
-  itemCount: number;
-  canEditLabel: boolean;
-  canRemove: boolean;
-  onMove: (index: number, direction: -1 | 1) => void;
-  onRemove: () => void;
-  onChange: (item: ChoiceAnswerItem) => void;
-}) {
-  const { item, index, itemCount, canEditLabel, canRemove, onMove, onRemove, onChange } = input;
-
-  return (
-    <div
-      data-testid="ranking-item"
-      className="relative grid grid-cols-[24px_minmax(0,1fr)_auto] gap-x-2 gap-y-2 border border-paper-line bg-white p-3 sm:grid-cols-[28px_minmax(0,1fr)_auto] sm:gap-x-3"
-    >
-      <div
-        className="flex h-9 w-6 items-center justify-center font-serif text-lg leading-none text-paper-accent tabular-nums sm:w-7"
-        data-testid="ranking-rank"
-      >
-        {index + 1}
-      </div>
-      {canEditLabel ? (
-        <Input
-          aria-label={`Ranking label ${index + 1}`}
-          value={item.label}
-          onKeyDownCapture={(event) => event.stopPropagation()}
-          onChange={(event) => onChange({ ...item, label: event.target.value })}
-        />
-      ) : (
-        <div className="min-w-0 py-1">
-          <p className="text-sm font-medium leading-6 text-paper-ink">{item.label}</p>
-        </div>
-      )}
-      <div className="flex h-9 gap-0.5 justify-end sm:gap-1" data-testid="ranking-actions">
         <Button
           type="button"
           variant="ghost"
           size="icon"
           className="size-8 sm:size-9"
-          aria-label={`Move ${item.label} up`}
-          disabled={index === 0}
-          onClick={() => onMove(index, -1)}
+          aria-label={`Remove ${item.label}`}
+          onClick={onRemove}
         >
-          <ArrowUp aria-hidden />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-8 sm:size-9"
-          aria-label={`Move ${item.label} down`}
-          disabled={index === itemCount - 1}
-          onClick={() => onMove(index, 1)}
-        >
-          <ArrowDown aria-hidden />
-        </Button>
-        {canRemove ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-8 sm:size-9"
-            aria-label={`Remove ${item.label}`}
-            onClick={onRemove}
-          >
-            <X aria-hidden />
-          </Button>
-        ) : null}
-      </div>
-      <Textarea
-        aria-label={`Ranking description ${index + 1}`}
-        placeholder="Optional description"
-        rows={2}
-        className="col-span-3 min-h-16 resize-y py-1.5 leading-5 sm:col-span-2 sm:col-start-2"
-        value={item.description ?? ""}
-        onKeyDownCapture={(event) => event.stopPropagation()}
-        onChange={(event) => onChange({ ...item, description: event.target.value || undefined })}
-      />
-    </div>
-  );
-}
-
-function CustomChoiceInput(input: {
-  label: string;
-  open: boolean;
-  onOpen: () => void;
-  onCancel: () => void;
-  onAdd: (item: ChoiceAnswerItem) => void;
-}) {
-  const { label, open, onOpen, onCancel, onAdd } = input;
-  const [customLabel, setCustomLabel] = useState("");
-  const [customDescription, setCustomDescription] = useState("");
-
-  function reset() {
-    setCustomLabel("");
-    setCustomDescription("");
-    onCancel();
-  }
-
-  if (!open) {
-    return (
-      <Button type="button" variant="ghost" size="sm" onClick={onOpen}>
-        <Plus aria-hidden />
-        {label}
-      </Button>
-    );
-  }
-
-  return (
-    <div className="flex w-full max-w-3xl flex-col gap-2 border-l border-paper-line pl-4">
-      <Input
-        aria-label={`${label} label`}
-        placeholder={label}
-        value={customLabel}
-        onChange={(event) => setCustomLabel(event.target.value)}
-      />
-      <Textarea
-        aria-label={`${label} description`}
-        placeholder="Optional description"
-        rows={2}
-        className="min-h-16 resize-y py-1.5 leading-5"
-        value={customDescription}
-        onChange={(event) => setCustomDescription(event.target.value)}
-      />
-      <div className="flex flex-wrap justify-end gap-2">
-        <Button type="button" variant="ghost" onClick={reset}>
-          Cancel
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={customLabel.trim().length === 0}
-          onClick={() => {
-            onAdd({
-              label: customLabel.trim(),
-              ...(customDescription.trim() ? { description: customDescription.trim() } : {})
-            });
-            reset();
-          }}
-        >
-          <Plus aria-hidden />
-          Add
+          <X aria-hidden />
         </Button>
       </div>
     </div>
@@ -1171,94 +921,29 @@ function createInitialAnswers(session: NormalizedSession): AnswerState {
   return Object.fromEntries(flattenGroups(session.groups).map((field) => [field.id, getInitialAnswer(field)]));
 }
 
-function createInitialChoiceDrafts(session: NormalizedSession): ChoiceDraftState {
-  return Object.fromEntries(
-    flattenGroups(session.groups)
-      .filter((field): field is NormalizedChoiceField => field.type === "choice")
-      .map((field) => [field.id, createInitialChoiceDraftsForField(field)])
-  );
-}
-
-function createInitialChoiceDraftsForField(field: NormalizedChoiceField): ChoiceOptionDraft[] {
-  const drafts = field.options.map((option, index) =>
-    answerItemToDraft(toAnswerItem(option), option.id || `option_${index + 1}`, option.custom)
-  );
-
-  for (const defaultItem of field.defaultItems) {
-    const existingIndex = drafts.findIndex((draft) => choiceLabelsMatch(draft, defaultItem));
-    if (existingIndex >= 0) {
-      if (defaultItem.description) {
-        drafts[existingIndex] = { ...drafts[existingIndex], description: defaultItem.description };
-      }
-    } else {
-      drafts.push(answerItemToDraft(toAnswerItem(defaultItem), defaultItem.id || `default_${drafts.length + 1}`, true));
-    }
-  }
-
-  return drafts;
-}
-
 function createRankingDrafts(items: ChoiceAnswerItem[]): RankingItemDraft[] {
-  return items.map((item, index) => rankingItemToDraft(item, `ranking_${index + 1}`));
+  return items.map(rankingItemToDraft);
 }
 
-function reconcileRankingDrafts(items: ChoiceAnswerItem[], current: RankingItemDraft[]): RankingItemDraft[] {
-  const usedKeys = new Set<string>();
-
-  return items.map((item, index) => {
-    const exactMatch = current.find((draft) => !usedKeys.has(draft.key) && choiceItemEquals(draft, item));
-
-    if (exactMatch) {
-      usedKeys.add(exactMatch.key);
-      return exactMatch;
-    }
-
-    const samePosition = current[index];
-    if (samePosition && !usedKeys.has(samePosition.key)) {
-      usedKeys.add(samePosition.key);
-      return { ...item, key: samePosition.key };
-    }
-
-    return rankingItemToDraft(item, `ranking_${index + 1}`);
-  });
-}
-
-function answerItemToDraft(item: ChoiceAnswerItem, keyHint: string, custom?: boolean): ChoiceOptionDraft {
-  return makeChoiceDraft(`${slugKey(keyHint)}_${slugKey(item.label)}`, item, custom);
-}
-
-function rankingItemToDraft(item: ChoiceAnswerItem, keyHint: string): RankingItemDraft {
+function rankingItemToDraft(item: ChoiceAnswerItem): RankingItemDraft {
   return {
-    key: `${slugKey(keyHint)}_${slugKey(item.label)}`,
+    key: item.label,
     label: item.label,
     ...(item.description ? { description: item.description } : {})
   };
 }
 
-function makeChoiceDraft(key: string, item: ChoiceAnswerItem, custom?: boolean): ChoiceOptionDraft {
-  return {
-    key,
-    label: item.label,
-    ...(item.description ? { description: item.description } : {}),
-    ...(custom ? { custom: true } : {})
-  };
+function findOtherChoiceItem(selected: ChoiceAnswerItem[], options: ChoiceAnswerItem[]): ChoiceAnswerItem | undefined {
+  return selected.find((item) => isOtherChoiceItem(item, options));
 }
 
-function findDraftForAnswer(drafts: ChoiceOptionDraft[], item: ChoiceAnswerItem): ChoiceOptionDraft | undefined {
-  return drafts.find((draft) => choiceLabelsMatch(draft, item));
+function isOtherChoiceItem(item: ChoiceAnswerItem, options: ChoiceAnswerItem[]): boolean {
+  return !options.some((option) => choiceLabelsMatch(option, item));
 }
 
-function isFieldDirty(field: NormalizedField, answer: SubmittedAnswer | undefined, drafts: ChoiceOptionDraft[] | undefined): boolean {
+function isFieldDirty(field: NormalizedField, answer: SubmittedAnswer | undefined): boolean {
   const initialAnswer = getInitialAnswer(field);
-  if (!submittedAnswersEqual(answer, initialAnswer)) {
-    return true;
-  }
-
-  if (field.type === "choice") {
-    return !choiceDraftListsEqual(drafts ?? [], createInitialChoiceDraftsForField(field));
-  }
-
-  return false;
+  return !submittedAnswersEqual(answer, initialAnswer);
 }
 
 function submittedAnswersEqual(left: SubmittedAnswer | undefined, right: SubmittedAnswer): boolean {
@@ -1267,7 +952,10 @@ function submittedAnswersEqual(left: SubmittedAnswer | undefined, right: Submitt
   }
 
   if (left.type === "choice" && right.type === "choice") {
-    return choiceItemListsEqual(normalizeChoiceItems(left.items), normalizeChoiceItems(right.items));
+    return (
+      choiceItemListsEqual(normalizeChoiceItems(left.items), normalizeChoiceItems(right.items)) &&
+      normalizeTextAnswer(left.note) === normalizeTextAnswer(right.note)
+    );
   }
 
   if (left.type === "choice" || right.type === "choice") {
@@ -1275,14 +963,6 @@ function submittedAnswersEqual(left: SubmittedAnswer | undefined, right: Submitt
   }
 
   return left.value === right.value;
-}
-
-function choiceDraftListsEqual(left: ChoiceOptionDraft[], right: ChoiceOptionDraft[]): boolean {
-  if (left.length !== right.length) {
-    return false;
-  }
-
-  return left.every((item, index) => item.custom === right[index].custom && choiceItemEquals(item, right[index]));
 }
 
 function validateAnswers(session: NormalizedSession, answers: AnswerState): FieldErrors {
@@ -1329,22 +1009,12 @@ function liveChoiceItems(items: ChoiceAnswerItem[] | null | undefined): ChoiceAn
 }
 
 function groupProgress(group: NormalizedGroup, answers: AnswerState): string {
-  const required = group.fields.filter((field) => field.required);
-  const complete = required.filter((field) => isAnswerComplete(field, answers[field.id])).length;
-  return `${complete} / ${required.length}`;
+  const answered = group.fields.filter((field) => isAnswerPresent(field, answers[field.id])).length;
+  return `${answered} / ${group.fields.length}`;
 }
 
 function isTextEditingTarget(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
-}
-
-function slugKey(input: string): string {
-  return input
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/gi, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 40) || "item";
 }
 
 function isDefaultSuggestionActive(field: NormalizedField, answer: SubmittedAnswer | undefined): boolean {

@@ -12,8 +12,6 @@
           "label": "How should the agent describe this product?",
           "type": "text",
           "multiline": true,
-          "format": "markdown",
-          "required": true,
           "default": "A cloud human-input handoff for AI Agents."
         },
         {
@@ -21,7 +19,6 @@
           "label": "Should this include approval or permission semantics?",
           "type": "choice",
           "mode": "single",
-          "required": true,
           "default": "No",
           "options": ["No", "Yes"]
         }
@@ -36,7 +33,6 @@
           "label": "Which capabilities belong in v1?",
           "type": "choice",
           "mode": "multiple",
-          "required": true,
           "default": ["stdin JSON", "Cloud fill URL", "collect command"],
           "options": ["stdin JSON", "Cloud fill URL", "collect command", "Paper Trail design"]
         },
@@ -45,7 +41,6 @@
           "label": "Rank the implementation priorities.",
           "type": "choice",
           "mode": "ranking",
-          "required": true,
           "options": [
             {
               "label": "Input validation",
@@ -59,8 +54,7 @@
           "id": "api_key",
           "label": "Optional API key for testing",
           "type": "text",
-          "secret": true,
-          "required": false
+          "secret": true
         }
       ]
     }

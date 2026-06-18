@@ -1,11 +1,7 @@
 import { z } from "zod";
 import type { NormalizedChoiceField, NormalizedField, NormalizedSession } from "./schema";
 import { formatPath } from "./errors";
-import {
-  isAnswerComplete,
-  type SubmitPayload,
-  type SubmittedAnswer
-} from "./answer-state";
+import { type SubmitPayload, type SubmittedAnswer } from "./answer-state";
 
 export type SubmitValidationError = {
   path: string;
@@ -46,7 +42,8 @@ const submittedAnswerSchema = z.discriminatedUnion("type", [
   z
     .object({
       type: z.literal("choice"),
-      items: z.array(choiceItemSchema).nullable()
+      items: z.array(choiceItemSchema).nullable(),
+      note: z.string().nullable().optional()
     })
     .strict()
 ]);
@@ -124,15 +121,6 @@ export function validateSubmittedAnswers(
     const fieldErrors =
       field.type === "choice" && answer?.type === "choice" ? validateChoiceAnswer(field, answer) : [];
     errors.push(...fieldErrors);
-
-    if (field.required && fieldErrors.length === 0 && !isAnswerComplete(field, answer)) {
-      errors.push({
-        path: `answers.${field.id}`,
-        code: "required_answer_missing",
-        message: "This required question needs an answer before the agent can continue.",
-        fieldId: field.id
-      });
-    }
   }
 
   return errors;
@@ -208,11 +196,11 @@ function validateChoiceAnswer(
     }
     seenLabels.set(label, index);
 
-    if (!field.allowCustom && !allowedLabels.has(label)) {
+    if (field.mode === "ranking" && !allowedLabels.has(label)) {
       errors.push({
         path: `answers.${field.id}.items[${index}].label`,
         code: "unknown_choice_item",
-        message: "This field does not allow custom answers, so submitted choices must match an existing option.",
+        message: "Ranking answers must match an existing option.",
         fieldId: field.id
       });
     }

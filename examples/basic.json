@@ -6,7 +6,6 @@
       "id": "package_name",
       "label": "What package name should the agent use?",
       "type": "text",
-      "required": true,
       "default": "loopmark"
     },
     {
@@ -14,7 +13,6 @@
       "label": "Which implementation style should the agent prefer?",
       "type": "choice",
       "mode": "single",
-      "required": true,
       "default": "Simple first",
       "options": [
         {

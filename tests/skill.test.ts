@@ -45,6 +45,12 @@ describe("bundled Loopmark skill", () => {
     expect(skill).toContain("npx --yes @andie/loopmark collect /path/to/s_xxx.receipt.json");
     expect(skill).toContain("`--yes` belongs to `npx`");
     expect(skill).toContain("Do not poll");
+    expect(skill).toContain("Treat every field as optional");
+    expect(skill).toContain("Do not include an `Other` option");
+    expect(skill).toContain("Loopmark adds `Other` automatically");
+    expect(skill).not.toContain("`required`");
+    expect(skill).not.toContain("\"format\"");
+    expect(skill).not.toContain("\"required\": true");
     expect(skill).not.toContain("pnpx @andie/loopmark");
     expect(skill).not.toContain("already on PATH");
     expect(skill).not.toContain("--no-open");
@@ -87,6 +93,14 @@ describe("bundled Loopmark skill", () => {
     expect(protocol).toContain("Use another Loopmark server");
     expect(protocol).toContain("Create with inline stdin");
     expect(protocol).toContain("Create with file redirection");
+    expect(protocol).toContain("All fields are optional");
+    expect(protocol).toContain("Loopmark always adds a system `Other` option");
+    expect(protocol).toContain("Choice answers may include a `note` string");
+    expect(protocol).not.toContain("`required`");
+    expect(protocol).not.toContain("allowCustom");
+    expect(protocol).not.toContain("editable");
+    expect(protocol).not.toContain("{ \"value\", \"label\"");
+    expect(protocol).not.toContain("\"format\"");
     expect(protocol).toContain("npx --yes @andie/loopmark --base-url https://your-loopmark.example");
     expect(protocol).toContain("LOOPMARK_BASE_URL");
     expect(skill).toContain("#self-hosting-on-cloudflare");
