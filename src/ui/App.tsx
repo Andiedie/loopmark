@@ -54,6 +54,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
 import { cn } from "../lib/utils";
+import { HomePage } from "./HomePage";
 
 type AnswerState = Record<string, SubmittedAnswer>;
 type FieldErrors = Record<string, string | undefined>;
@@ -84,13 +85,14 @@ class TextInputSafeKeyboardSensor extends KeyboardSensor {
 
 export function App() {
   const sessionCode = useMemo(() => extractSessionCodeFromHash(window.location.hash), []);
+  const isHomeRoute = window.location.pathname === "/" && !sessionCode;
   const [remoteSession, setRemoteSession] = useState<RemoteSessionState | null>(null);
   const [answers, setAnswers] = useState<AnswerState>({});
   const [fieldResetVersions, setFieldResetVersions] = useState<Record<string, number>>({});
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [loadError, setLoadError] = useState<string | null>(
-    sessionCode ? null : "This Loopmark link is missing a valid session code."
+    sessionCode || isHomeRoute ? null : "This Loopmark link is missing a valid session code."
   );
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -126,8 +128,13 @@ export function App() {
   }, [sessionCode]);
 
   useEffect(() => {
+    if (isHomeRoute) {
+      document.title = "Loopmark - Human input for AI agents";
+      return;
+    }
+
     document.title = session ? `${session.title} - Loopmark` : "Loopmark";
-  }, [session]);
+  }, [isHomeRoute, session]);
 
   const progress = useMemo(() => {
     if (!session) {
@@ -140,6 +147,10 @@ export function App() {
       total: fields.length
     };
   }, [answers, session]);
+
+  if (isHomeRoute) {
+    return <HomePage />;
+  }
 
   if (loadError) {
     return <MessageScreen title="Unable to load Loopmark" message={loadError} />;

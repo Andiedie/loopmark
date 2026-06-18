@@ -74,6 +74,18 @@ async function renderCloudApp(loadedSession: NormalizedSession, options?: CloudS
   return remote;
 }
 
+function stubClipboard(writeText: ReturnType<typeof vi.fn>) {
+  vi.stubGlobal(
+    "navigator",
+    Object.create(navigator, {
+      clipboard: {
+        configurable: true,
+        value: { writeText }
+      }
+    })
+  );
+}
+
 describe("Loopmark UI", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -337,7 +349,86 @@ describe("Loopmark UI", () => {
     expect(screen.getByText("Session request failed with 403.")).toBeInTheDocument();
   });
 
-  it("shows a load error without fetching when the link has no session code", async () => {
+  it("shows the public homepage without fetching when visiting the root path", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.pushState({}, "", "/");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Loopmark" })).toBeInTheDocument();
+    expect(screen.getByText("Structured human input for AI agents.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy install command" })).toBeInTheDocument();
+    expect(screen.getByText(/Private deployments are supported/i)).toBeInTheDocument();
+    expect(screen.queryByText("Self-hosted service")).not.toBeInTheDocument();
+    expect(screen.queryByText(/The default hosted service is this site/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("Unable to load Loopmark")).not.toBeInTheDocument();
+    await waitFor(() => expect(document.title).toBe("Loopmark - Human input for AI agents"));
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("uses a single accessible name for the homepage brand link", async () => {
+    window.history.pushState({}, "", "/");
+
+    render(<App />);
+
+    expect(await screen.findByRole("link", { name: "Loopmark" })).toHaveAttribute("href", "/");
+    expect(screen.queryByRole("link", { name: "LoopmarkLoopmark" })).not.toBeInTheDocument();
+  });
+
+  it("shows the public homepage when refreshing a root anchor", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.pushState({}, "", "/#workflow");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Loopmark" })).toBeInTheDocument();
+    expect(screen.queryByText("This Loopmark link is missing a valid session code.")).not.toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("shows the public homepage when the root hash is not a valid encoded anchor", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.pushState({}, "", "/#%");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Loopmark" })).toBeInTheDocument();
+    expect(screen.queryByText("This Loopmark link is missing a valid session code.")).not.toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("copies the homepage install command", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    stubClipboard(writeText);
+    window.history.pushState({}, "", "/");
+
+    render(<App />);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Copy install command" }));
+
+    expect(writeText).toHaveBeenCalledWith("npx skills add andiedie/loopmark");
+    expect(screen.getByText("Copied")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Install command copied" })).toBeInTheDocument();
+  });
+
+  it("shows a homepage copy failure when clipboard writing is unavailable", async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error("Denied"));
+    stubClipboard(writeText);
+    window.history.pushState({}, "", "/");
+
+    render(<App />);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Copy install command" }));
+
+    expect(writeText).toHaveBeenCalledWith("npx skills add andiedie/loopmark");
+    expect(screen.getByText("Copy failed")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy install command failed" })).toBeInTheDocument();
+  });
+
+  it("shows a load error without fetching when a fill link has no session code", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     window.history.pushState({}, "", "/s");
