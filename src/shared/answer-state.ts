@@ -7,7 +7,7 @@ export type ChoiceAnswerItem = {
 
 export type SubmittedAnswer =
   | { type: "text"; value: string | null }
-  | { type: "secret"; value: string | null }
+  | { type: "secret"; value: string | null; note?: string | null }
   | { type: "choice"; items: ChoiceAnswerItem[] | null; note?: string | null };
 
 export type SubmitPayload = {
@@ -21,6 +21,10 @@ export function normalizeTextAnswer(value: string | null | undefined): string | 
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+export function isSecretValuePresent(value: string | null | undefined): value is string {
+  return value !== null && value !== undefined && value.length > 0;
 }
 
 export function normalizeChoiceItems(items: ChoiceAnswerItem[] | null | undefined): ChoiceAnswerItem[] {
@@ -66,6 +70,10 @@ export function isAnswerPresent(field: NormalizedField, answer: SubmittedAnswer 
   if (field.type === "text") {
     if (answer.type !== (field.secret ? "secret" : "text")) {
       return false;
+    }
+
+    if (answer.type === "secret") {
+      return isSecretValuePresent(answer.value) || normalizeTextAnswer(answer.note) !== null;
     }
 
     return normalizeTextAnswer(answer.value) !== null;

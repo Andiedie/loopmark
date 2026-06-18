@@ -22,12 +22,12 @@ const workflowSteps = [
     body: "A compact JSON session is encrypted locally, posted to the Worker, and returned as a public fill URL."
   },
   {
-    title: "A human answers in the browser",
-    body: "The fill page keeps the questions readable, supports notes and rankings, and submits encrypted answers."
+    title: "A human answers and copies Markdown",
+    body: "The fill page keeps the questions readable, supports notes and rankings, and lets the human copy traceable Markdown back to the agent."
   },
   {
-    title: "The agent collects later",
-    body: "The calling agent uses its local receipt to fetch and decrypt the result without polling while you think."
+    title: "The agent reads Markdown",
+    body: "Non-secret answers stay in the pasted Markdown. If secrets were omitted, the agent downloads the encrypted secret bundle with its local receipt."
   }
 ];
 
@@ -42,8 +42,9 @@ const fitItems = [
 
 const trustItems = [
   "The public link carries the session code in the URL hash.",
-  "The Worker and R2 store encrypted envelopes, not plaintext questions or answers.",
-  "Secret answers are decrypted during collection and written to a local file."
+  "The Worker and R2 store encrypted session envelopes and encrypted secret bundles only.",
+  "Non-secret answers and notes stay visible in the pasted Markdown conversation.",
+  "Secret values are omitted from Markdown and retrieved into a local .env file only when needed."
 ];
 
 const installCommand = "npx skills add andiedie/loopmark";
@@ -128,8 +129,8 @@ export function HomePage() {
           <h1 className="mt-5 font-serif text-6xl leading-none md:text-7xl">Loopmark</h1>
           <p className="mt-5 max-w-2xl text-xl leading-8 text-paper-ink">Structured human input for AI agents.</p>
           <p className="mt-4 max-w-3xl text-base leading-7 text-paper-muted">
-            Give agents a clean way to pause for the decisions that still belong to a person, then let them collect the
-            encrypted answer when you are done.
+            Give agents a clean way to pause for the decisions that still belong to a person, then copy traceable
+            Markdown back when you are done.
           </p>
           <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row">
             <a
@@ -188,7 +189,7 @@ export function HomePage() {
 
           <div id="privacy" className="min-w-0">
             <ShieldCheck aria-hidden className="mb-5 size-6 text-paper-accent" />
-            <h2 className="font-serif text-3xl leading-tight">Designed around encrypted collection.</h2>
+            <h2 className="font-serif text-3xl leading-tight">Designed around traceable Markdown and encrypted secrets.</h2>
             <ul className="mt-6 grid gap-4">
               {trustItems.map((item) => (
                 <li key={item} className="flex items-start gap-3 text-sm leading-6 text-paper-muted">
@@ -208,7 +209,7 @@ export function HomePage() {
             <h2 className="font-serif text-4xl leading-tight">Install the agent skill.</h2>
             <p className="mt-4 max-w-xl text-sm leading-6 text-paper-muted">
               Most users only need the skill. It teaches the agent when to ask, how to create a Loopmark session, and
-              when to collect the receipt.
+              when to read pasted Markdown or download omitted secrets.
             </p>
           </div>
           <div className="min-w-0">

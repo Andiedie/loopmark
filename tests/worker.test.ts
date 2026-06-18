@@ -2,10 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import worker, { type WorkerEnv } from "../src/server/worker";
 import { normalizeSession } from "../src/shared/schema";
 import {
-  createAnswerSubmission,
+  createSecretBundleSubmission,
   createRemoteSessionPackage,
+  decryptSecretBundleEnvelope,
   decryptSessionEnvelope,
-  encryptAnswerEnvelope
+  encryptSecretBundleEnvelope
 } from "../src/shared/cloud-protocol";
 
 class MemoryR2Object {
@@ -58,7 +59,7 @@ describe("Cloudflare Worker API", () => {
     expect(missing.status).toBe(404);
   });
 
-  it("stores an encrypted session, accepts one encrypted answer, and returns pending before submit", async () => {
+  it("stores and returns an encrypted session without accepting answer storage", async () => {
     const session = normalizeSession({
       title: "Need input",
       fields: [{ id: "scope", label: "Scope", type: "text" }]
@@ -91,62 +92,189 @@ describe("Cloudflare Worker API", () => {
       session: { title: "Need input" }
     });
 
-    const pending = await worker.fetch(
+    const answerRoute = await worker.fetch(
       new Request(`https://loopmark.test/api/sessions/${created.sessionId}/answer`),
       env
     );
-    expect(pending.status).toBe(202);
+    expect(answerRoute.status).toBe(404);
+    expect(bucket.objects.has(`sessions/${created.sessionId}/answer.json`)).toBe(false);
+  });
 
+  it("stores encrypted secret bundles only with a valid upload proof", async () => {
+    const session = normalizeSession({
+      title: "Secret review",
+      fields: [{ id: "api_key", label: "API key", type: "text", secret: true }]
+    });
+    const created = await createRemoteSessionPackage({
+      session,
+      baseUrl: "https://loopmark.test"
+    });
     const decryptedSession = await decryptSessionEnvelope(created.sessionCode, created.envelope);
-    const answer = await encryptAnswerEnvelope({
+    const envelope = await encryptSecretBundleEnvelope({
       sessionId: created.sessionId,
       answerPublicKey: decryptedSession.answerPublicKey,
-      payload: {
-        answers: {
-          scope: { type: "text", value: "MVP" }
+      bundle: {
+        secrets: {
+          api_key: {
+            value: "secret-from-worker-test"
+          }
         }
       }
     });
-    const submission = await createAnswerSubmission({
+    const submission = await createSecretBundleSubmission({
       sessionCode: created.sessionCode,
-      envelope: answer
+      sessionId: created.sessionId,
+      envelope
     });
-    const invalidProof = await worker.fetch(
-      new Request(`https://loopmark.test/api/sessions/${created.sessionId}/answer`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...submission, answerProof: "invalid-proof" })
-      }),
-      env
-    );
-    expect(invalidProof.status).toBe(403);
+    const env = createEnv();
 
-    const submit = await worker.fetch(
-      new Request(`https://loopmark.test/api/sessions/${created.sessionId}/answer`, {
+    const missingSessionResponse = await worker.fetch(
+      new Request(`https://loopmark.test/api/sessions/${created.sessionId}/secrets`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(submission)
       }),
       env
     );
-    expect(submit.status).toBe(201);
+    expect(missingSessionResponse.status).toBe(404);
 
-    const duplicate = await worker.fetch(
-      new Request(`https://loopmark.test/api/sessions/${created.sessionId}/answer`, {
+    await worker.fetch(
+      new Request("https://loopmark.test/api/sessions", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(created.envelope)
+      }),
+      env
+    );
+
+    const badProofResponse = await worker.fetch(
+      new Request(`https://loopmark.test/api/sessions/${created.sessionId}/secrets`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...submission, secretUploadProof: "wrong-proof" })
+      }),
+      env
+    );
+    expect(badProofResponse.status).toBe(403);
+
+    const uploadResponse = await worker.fetch(
+      new Request(`https://loopmark.test/api/sessions/${created.sessionId}/secrets`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(submission)
       }),
       env
     );
-    expect(duplicate.status).toBe(409);
+    expect(uploadResponse.status).toBe(201);
 
-    const collected = await worker.fetch(
-      new Request(`https://loopmark.test/api/sessions/${created.sessionId}/answer`),
+    const downloadResponse = await worker.fetch(
+      new Request(`https://loopmark.test/api/sessions/${created.sessionId}/secrets`),
       env
     );
-    expect(collected.status).toBe(200);
-    expect(await collected.json()).toMatchObject({ kind: "loopmark.answer", sessionId: created.sessionId });
+    expect(downloadResponse.status).toBe(200);
+    await expect(
+      decryptSecretBundleEnvelope({
+        receipt: created.receipt,
+        envelope: await downloadResponse.json()
+      })
+    ).resolves.toEqual({
+      secrets: {
+        api_key: {
+          value: "secret-from-worker-test"
+        }
+      }
+    });
+  });
+
+  it("does not let a later secret upload overwrite the first submitted bundle", async () => {
+    const session = normalizeSession({
+      title: "Secret review",
+      fields: [{ id: "api_key", label: "API key", type: "text", secret: true }]
+    });
+    const created = await createRemoteSessionPackage({
+      session,
+      baseUrl: "https://loopmark.test"
+    });
+    const decryptedSession = await decryptSessionEnvelope(created.sessionCode, created.envelope);
+    const firstEnvelope = await encryptSecretBundleEnvelope({
+      sessionId: created.sessionId,
+      answerPublicKey: decryptedSession.answerPublicKey,
+      bundle: {
+        secrets: {
+          api_key: {
+            value: "first-secret"
+          }
+        }
+      }
+    });
+    const secondEnvelope = await encryptSecretBundleEnvelope({
+      sessionId: created.sessionId,
+      answerPublicKey: decryptedSession.answerPublicKey,
+      bundle: {
+        secrets: {
+          api_key: {
+            value: "second-secret"
+          }
+        }
+      }
+    });
+    const firstSubmission = await createSecretBundleSubmission({
+      sessionCode: created.sessionCode,
+      sessionId: created.sessionId,
+      envelope: firstEnvelope
+    });
+    const secondSubmission = await createSecretBundleSubmission({
+      sessionCode: created.sessionCode,
+      sessionId: created.sessionId,
+      envelope: secondEnvelope
+    });
+    const env = createEnv();
+
+    await worker.fetch(
+      new Request("https://loopmark.test/api/sessions", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(created.envelope)
+      }),
+      env
+    );
+
+    const firstUpload = await worker.fetch(
+      new Request(`https://loopmark.test/api/sessions/${created.sessionId}/secrets`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(firstSubmission)
+      }),
+      env
+    );
+    expect(firstUpload.status).toBe(201);
+
+    const secondUpload = await worker.fetch(
+      new Request(`https://loopmark.test/api/sessions/${created.sessionId}/secrets`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(secondSubmission)
+      }),
+      env
+    );
+    expect(secondUpload.status).toBe(409);
+
+    const downloadResponse = await worker.fetch(
+      new Request(`https://loopmark.test/api/sessions/${created.sessionId}/secrets`),
+      env
+    );
+    await expect(
+      decryptSecretBundleEnvelope({
+        receipt: created.receipt,
+        envelope: await downloadResponse.json()
+      })
+    ).resolves.toEqual({
+      secrets: {
+        api_key: {
+          value: "first-secret"
+        }
+      }
+    });
   });
 
   it("rejects invalid session ids, non-JSON bodies, invalid envelopes, and oversized bodies", async () => {
@@ -156,7 +284,7 @@ describe("Cloudflare Worker API", () => {
     expect(invalidId.status).toBe(400);
 
     const invalidAnswerId = await worker.fetch(new Request("https://loopmark.test/api/sessions/not-valid/answer"), env);
-    expect(invalidAnswerId.status).toBe(400);
+    expect(invalidAnswerId.status).toBe(404);
 
     const invalidPostAnswerId = await worker.fetch(
       new Request("https://loopmark.test/api/sessions/not-valid/answer", {
@@ -165,13 +293,22 @@ describe("Cloudflare Worker API", () => {
       }),
       env
     );
-    expect(invalidPostAnswerId.status).toBe(400);
+    expect(invalidPostAnswerId.status).toBe(404);
 
     const missingAnswerSession = await worker.fetch(
       new Request("https://loopmark.test/api/sessions/s_abcdefghijklmnopqrstuvwx/answer"),
       env
     );
     expect(missingAnswerSession.status).toBe(404);
+
+    const invalidSecretId = await worker.fetch(new Request("https://loopmark.test/api/sessions/not-valid/secrets"), env);
+    expect(invalidSecretId.status).toBe(400);
+
+    const missingSecretBundle = await worker.fetch(
+      new Request("https://loopmark.test/api/sessions/s_abcdefghijklmnopqrstuvwx/secrets"),
+      env
+    );
+    expect(missingSecretBundle.status).toBe(404);
 
     const invalidJson = await worker.fetch(
       new Request("https://loopmark.test/api/sessions", {
@@ -200,7 +337,6 @@ describe("Cloudflare Worker API", () => {
           version: 1,
           kind: "loopmark.session",
           sessionId: "not-valid",
-          answerProofHash: "hash",
           salt: "salt",
           iv: "iv",
           ciphertext: "ciphertext"
@@ -219,6 +355,54 @@ describe("Cloudflare Worker API", () => {
       env
     );
     expect(tooLarge.status).toBe(400);
+
+    const session = normalizeSession({
+      title: "Need input",
+      fields: [{ id: "api_key", label: "API key", type: "text", secret: true }]
+    });
+    const created = await createRemoteSessionPackage({ session, baseUrl: "https://loopmark.test" });
+    await worker.fetch(
+      new Request("https://loopmark.test/api/sessions", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(created.envelope)
+      }),
+      env
+    );
+
+    const malformedSecretSubmission = await worker.fetch(
+      new Request(`https://loopmark.test/api/sessions/${created.sessionId}/secrets`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}"
+      }),
+      env
+    );
+    expect(malformedSecretSubmission.status).toBe(400);
+
+    const mismatchedSecretSubmission = await worker.fetch(
+      new Request("https://loopmark.test/api/sessions/s_abcdefghijklmnopqrstuvwx/secrets", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          version: 1,
+          kind: "loopmark.secret_submission",
+          sessionId: created.sessionId,
+          secretUploadProof: "proof",
+          envelope: {
+            version: 1,
+            kind: "loopmark.secrets",
+            sessionId: created.sessionId,
+            ephemeralPublicKey: {},
+            salt: "salt",
+            iv: "iv",
+            ciphertext: "ciphertext"
+          }
+        })
+      }),
+      env
+    );
+    expect(mismatchedSecretSubmission.status).toBe(400);
   });
 
   it("returns a generic 500 when a binding throws unexpectedly", async () => {
@@ -253,7 +437,7 @@ describe("Cloudflare Worker API", () => {
     expect(await response.text()).toBe("asset");
   });
 
-  it("rejects duplicate sessions and malformed answer submissions", async () => {
+  it("rejects duplicate sessions and leaves answer routes unsupported", async () => {
     const session = normalizeSession({
       title: "Need input",
       fields: [{ id: "scope", label: "Scope", type: "text" }]
@@ -273,62 +457,13 @@ describe("Cloudflare Worker API", () => {
     expect((await worker.fetch(createRequest(), env)).status).toBe(201);
     expect((await worker.fetch(createRequest(), env)).status).toBe(409);
 
-    const missingSessionSubmit = await worker.fetch(
+    const answerPost = await worker.fetch(
       new Request("https://loopmark.test/api/sessions/s_abcdefghijklmnopqrstuvwx/answer", {
         method: "POST",
         body: "{}"
       }),
       env
     );
-    expect(missingSessionSubmit.status).toBe(404);
-
-    const invalidAnswer = await worker.fetch(
-      new Request(`https://loopmark.test/api/sessions/${created.sessionId}/answer`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ version: 1 })
-      }),
-      env
-    );
-    expect(invalidAnswer.status).toBe(400);
-
-    const invalidAnswerJson = await worker.fetch(
-      new Request(`https://loopmark.test/api/sessions/${created.sessionId}/answer`, {
-        method: "POST",
-        body: "{bad"
-      }),
-      env
-    );
-    expect(invalidAnswerJson.status).toBe(400);
-
-    const tooLargeAnswer = await worker.fetch(
-      new Request(`https://loopmark.test/api/sessions/${created.sessionId}/answer`, {
-        method: "POST",
-        body: "x".repeat(1024 * 1024 + 1)
-      }),
-      env
-    );
-    expect(tooLargeAnswer.status).toBe(400);
-
-    const decryptedSession = await decryptSessionEnvelope(created.sessionCode, created.envelope);
-    const answer = await encryptAnswerEnvelope({
-      sessionId: created.sessionId,
-      answerPublicKey: decryptedSession.answerPublicKey,
-      payload: { answers: {} }
-    });
-    const mismatchedAnswer = await worker.fetch(
-      new Request(`https://loopmark.test/api/sessions/${created.sessionId}/answer`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(
-          await createAnswerSubmission({
-            sessionCode: created.sessionCode,
-            envelope: { ...answer, sessionId: "s_abcdefghijklmnopqrstuvwx" }
-          })
-        )
-      }),
-      env
-    );
-    expect(mismatchedAnswer.status).toBe(400);
+    expect(answerPost.status).toBe(404);
   });
 });

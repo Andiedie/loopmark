@@ -2,10 +2,11 @@
 
 ## CLI Contract
 
-Loopmark has two cloud commands:
+Loopmark has one cloud create command and one local secret download command:
 
 1. Create a cloud session from JSON on stdin.
-2. Collect the encrypted answer later with the local receipt file.
+2. Read the pasted Markdown answer directly.
+3. Download omitted secrets later with the local receipt file only if the Markdown includes a secrets section.
 
 Create with inline stdin:
 
@@ -34,33 +35,56 @@ Create stdout:
 
 Create stderr may repeat the URL and receipt path for human readability. Do not parse stderr as the machine-readable result unless the command exits non-zero with a validation report.
 
-Keep the `receiptFile` path local. It contains the answer decryption key and is required for collection.
+Keep the `receiptFile` path local. It contains the secret decryption key and is required for `secrets`.
 
-Collect:
+After the human opens the fill URL, answers in the browser, clicks Copy answers, and pastes the copied Markdown back to chat, read non-secret answers directly from that Markdown. Do not ask the human to paste only "done" or a short retrieval token; the Markdown is the durable conversation record.
+
+If the Markdown says secrets were omitted, download the encrypted secret bundle by session id:
 
 ```bash
-npx --yes @andie/loopmark collect /tmp/loopmark-receipts/s_xxx.receipt.json
+npx --yes @andie/loopmark secrets s_xxx
 ```
 
-Collect stdout is either:
+The Markdown includes a human-readable answer summary. Secret values are omitted and replaced by a command when a secret value was entered. Notes remain visible in Markdown.
+
+````markdown
+## Scope
+
+Answer:
+
+> Keep the smallest viable change.
+
+## API token
+
+Answer: _Secret omitted from Markdown._
+
+## Secrets
+
+Secret answers were omitted from this Markdown. Run this command on the agent machine to download them:
+
+```sh
+npx --yes @andie/loopmark secrets s_xxx
+```
+````
+
+Secret download stdout is:
 
 ```json
 {
-  "status": "pending",
-  "message": "Loopmark session has not been submitted yet."
+  "status": "secrets_downloaded",
+  "sessionId": "s_xxx",
+  "secretFile": "/tmp/loopmark-s_xxx/secrets.env",
+  "format": "env"
 }
 ```
 
-or:
+The secret file is `.env` style:
 
-```json
-{
-  "status": "submitted",
-  "answers": {}
-}
+```dotenv
+api_token=secret-value
 ```
 
-Do not poll. Run `collect` after the human explicitly says the form is submitted. If `collect` returns `pending`, tell the human it is still pending and wait again.
+Do not poll. Run `secrets` only after the human pastes copied Markdown that says secrets were omitted.
 
 Use another Loopmark server with:
 
@@ -74,14 +98,14 @@ Use a custom receipt or secret directory only when the runtime needs one:
 
 ```bash
 npx --yes @andie/loopmark --receipt-dir /path/to/receipts < /path/to/questions.json
-npx --yes @andie/loopmark collect /path/to/s_xxx.receipt.json --secret-dir /path/to/secrets
+npx --yes @andie/loopmark secrets s_xxx --receipt /path/to/s_xxx.receipt.json --secret-dir /path/to/secrets
 ```
 
 ## Security Model
 
-The public fill URL contains only a session code in the URL hash. The local receipt file contains the answer decryption key. Do not share receipt files in chat, logs, commits, issue comments, or messages to the human.
+The public fill URL contains only a session code in the URL hash. The local receipt file contains the secret decryption key. Do not share receipt files in chat, logs, commits, issue comments, or messages to the human.
 
-The Worker and R2 only store encrypted JSON envelopes. Browser submissions include a session-code-derived proof, so knowing a `sessionId` alone is not enough to submit an answer. Secret answers are encrypted in the browser, decrypted during `collect`, written to a local temporary file, and omitted from stdout.
+The Worker and R2 store encrypted session envelopes and encrypted secret bundles only. Non-secret answers and notes are not posted to or stored by the Worker; they exist in the pasted Markdown conversation. Secret values are encrypted in the browser, uploaded as ciphertext, decrypted during `secrets`, written to a local `.env` file, and omitted from stdout.
 
 ## Session Object
 
@@ -111,7 +135,7 @@ Grouped sessions use:
 }
 ```
 
-Field ids must be unique across the whole session. Prefer stable `snake_case` ids because final answers are keyed by id.
+Field ids must be unique across the whole session. Prefer stable `snake_case` ids because the pasted Markdown and secret `.env` file both refer to field ids.
 
 All fields are optional.
 
@@ -133,9 +157,11 @@ Supported text keys:
 
 - `multiline`: render a textarea.
 - `default`: string only.
-- `secret`: write the submitted value to a local temporary file during collection instead of stdout.
+- `secret`: omit the submitted value from Markdown, encrypt it in the browser, and later write it to a local `.env` file with `loopmark secrets`.
 
 Do not set `default` on secret fields.
+
+Secret text fields also include a normal note textarea in the fill page. The note is visible in Markdown like other notes and is not written to the secret `.env` file.
 
 Secret field example:
 
@@ -186,56 +212,61 @@ For `ranking` fields with no explicit default, Loopmark initially ranks all opti
 
 Single, multiple, and ranking choice fields also include a note textarea in the fill page. The human can explain why they chose an option, why they reordered items, or why they skipped the question.
 
-## Submitted Output Shape
+## Pasted Markdown Shape
 
-Text answers are strings or `null`:
+Text answers are visible in Markdown:
 
-```json
-{
-  "question": "What context should I preserve?",
-  "answer": "Keep the implementation small."
-}
+```markdown
+## What context should I preserve?
+
+Field:
+
+> context
+
+Answer:
+
+> Keep the implementation small.
 ```
 
-Single choice answers are one object or `null`:
+Single choice answers include the selected label and optional description:
 
-```json
-{
-  "question": "Which direction should I implement?",
-  "answer": {
-    "label": "Smallest compatible package change",
-    "description": "Publish the bundled skill and README instructions."
-  }
-}
+```markdown
+## Which direction should I implement?
+
+Field:
+
+> direction
+
+Answer:
+
+Label:
+
+> Smallest compatible package change
 ```
 
-Multiple and ranking choice answers are arrays or `null`. Ranking order is the returned array order.
+Multiple and ranking choice answers list each choice. Ranking order is the Markdown order.
 
-Choice answers may include a `note` string:
+Choice answers may include a note:
 
-```json
-{
-  "question": "Which direction should I implement?",
-  "answer": {
-    "label": "Smallest compatible package change"
-  },
-  "note": "This keeps the change small enough to review today."
-}
+```markdown
+Note:
+
+> This keeps the change small enough to review today.
 ```
 
-Secret answers return a file pointer, not the secret value:
+Secret answers are omitted from Markdown:
 
-```json
-{
-  "question": "Optional API token",
-  "answer": {
-    "secretFile": "/tmp/loopmark-secrets/001_api_token.txt",
-    "description": "Secret value was written to a local temporary file during collection and omitted from answers."
-  }
-}
+```markdown
+## Optional API token
+
+Field:
+
+> api_token
+
+Answer: _Secret omitted from Markdown._
 ```
 
-Read a secret file only when the task requires the value. Do not paste secret values into chat, logs, commits, or non-secret outputs.
+After running `loopmark secrets`, secret values are written to the reported `.env` file. Read that file only when the task requires the value. Do not paste secret values into chat, logs, commits, or non-secret outputs.
 
 ## Validation Failures
 

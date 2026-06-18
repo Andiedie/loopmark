@@ -1,19 +1,20 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { buildFinalOutput, type FinalOutput } from "../shared/answers";
 import {
-  assertAnswerEnvelope,
+  assertSessionId,
+  assertSecretBundleEnvelope,
   createRemoteSessionPackage,
-  decryptAnswerEnvelope,
+  decryptSecretBundleEnvelope,
   DEFAULT_BASE_URL,
   normalizeBaseUrl,
   parseRemoteSessionReceipt,
+  type SecretBundle,
   type RemoteSessionReceipt
 } from "../shared/cloud-protocol";
-import { LoopmarkInputError } from "../shared/errors";
 import type { NormalizedSession } from "../shared/schema";
-import { validateSubmitPayload } from "../shared/submission";
+import type { NormalizedField } from "../shared/schema";
+import { secretEnvKeyForFieldId } from "../shared/secret-env";
 
 export type RemoteCreateOptions = {
   baseUrl?: string;
@@ -28,17 +29,19 @@ export type RemoteCreateResult = {
   sessionId: string;
 };
 
-export type RemoteCollectOptions = {
+export type RemoteSecretsOptions = {
+  receiptFile?: string;
+  receiptDir?: string;
   secretDir?: string;
   fetch?: typeof fetch;
 };
 
-export type RemoteCollectResult =
-  | FinalOutput
-  | {
-      status: "pending";
-      message: string;
-    };
+export type RemoteSecretsResult = {
+  status: "secrets_downloaded";
+  sessionId: string;
+  secretFile: string;
+  format: "env";
+};
 
 export async function createRemoteSession(
   session: NormalizedSession,
@@ -66,43 +69,35 @@ export async function createRemoteSession(
   };
 }
 
-export async function collectRemoteResult(
-  receiptFile: string,
-  options: RemoteCollectOptions = {}
-): Promise<RemoteCollectResult> {
-  const receipt = await readReceipt(receiptFile);
+export async function downloadRemoteSecrets(
+  sessionId: string,
+  options: RemoteSecretsOptions = {}
+): Promise<RemoteSecretsResult> {
+  const normalizedSessionId = assertSessionId(sessionId);
+  const receipt = await readReceipt(options.receiptFile ?? defaultReceiptFile(normalizedSessionId, options.receiptDir));
+  if (receipt.sessionId !== normalizedSessionId) {
+    throw new Error("Loopmark receipt does not match the requested session id.");
+  }
+
   const clientFetch = options.fetch ?? fetch;
-  const response = await clientFetch(apiUrl(receipt.baseUrl, `/api/sessions/${receipt.sessionId}/answer`));
-
-  if (response.status === 202) {
-    return {
-      status: "pending",
-      message: "Loopmark session has not been submitted yet."
-    };
-  }
-
+  const response = await clientFetch(apiUrl(receipt.baseUrl, `/api/sessions/${encodeURIComponent(normalizedSessionId)}/secrets`));
   if (!response.ok) {
-    throw new Error(await responseErrorMessage(response, "Unable to collect Loopmark answer."));
+    throw new Error(await responseErrorMessage(response, "Unable to download Loopmark secrets."));
   }
 
-  const rawEnvelope = (await response.json()) as unknown;
-  assertAnswerEnvelope(rawEnvelope);
-  const payload = await decryptAnswerEnvelope({ receipt, envelope: rawEnvelope });
-  const validation = validateSubmitPayload(receipt.session, payload);
-  if (!validation.ok) {
-    throw new LoopmarkInputError(
-      validation.report.errors.map((error) => ({
-        path: error.path,
-        code: error.code,
-        message: error.message,
-        why: "The encrypted answer payload did not match the original Loopmark session.",
-        fix: "Ask the user to submit the current Loopmark session again, then run collect with the same receipt."
-      }))
-    );
-  }
+  const envelope = (await response.json()) as unknown;
+  assertSecretBundleEnvelope(envelope);
+  const bundle = await decryptSecretBundleEnvelope({ receipt, envelope });
+  const secretDir = resolve(options.secretDir ?? join(tmpdir(), `loopmark-${normalizedSessionId}`));
+  const secretFile = join(secretDir, "secrets.env");
+  await writeSecretEnvFile(receipt, bundle, secretFile);
 
-  const secretDir = options.secretDir ?? join(tmpdir(), `loopmark-${receipt.sessionId}`);
-  return buildFinalOutput(receipt.session, validation.payload, { secretDir });
+  return {
+    status: "secrets_downloaded",
+    sessionId: normalizedSessionId,
+    secretFile,
+    format: "env"
+  };
 }
 
 async function writeReceipt(receipt: RemoteSessionReceipt, receiptDir?: string): Promise<string> {
@@ -111,6 +106,10 @@ async function writeReceipt(receipt: RemoteSessionReceipt, receiptDir?: string):
   const receiptFile = join(directory, `${receipt.sessionId}.receipt.json`);
   await writeFile(receiptFile, `${JSON.stringify(receipt, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
   return receiptFile;
+}
+
+function defaultReceiptFile(sessionId: string, receiptDir?: string): string {
+  return join(resolve(receiptDir ?? join(tmpdir(), "loopmark-receipts")), `${sessionId}.receipt.json`);
 }
 
 async function readReceipt(receiptFile: string): Promise<RemoteSessionReceipt> {
@@ -122,8 +121,79 @@ async function readReceipt(receiptFile: string): Promise<RemoteSessionReceipt> {
     ...receipt,
     baseUrl: normalizeBaseUrl(receipt.baseUrl),
     fillUrl: receipt.fillUrl,
-    sessionId: receipt.sessionId
+    sessionId: assertSessionId(receipt.sessionId)
   };
+}
+
+async function writeSecretEnvFile(
+  receipt: RemoteSessionReceipt,
+  bundle: SecretBundle,
+  secretFile: string
+): Promise<void> {
+  const directory = resolve(secretFile, "..");
+  const lines: string[] = [];
+  const envKeyByFieldId = assertUniqueSecretEnvKeys(receipt.session);
+
+  for (const field of flattenFields(receipt.session)) {
+    if (field.type !== "text" || !field.secret) {
+      continue;
+    }
+
+    const secret = bundle.secrets[field.id];
+    if (!secret) {
+      continue;
+    }
+
+    const key = envKeyByFieldId.get(field.id);
+    if (!key) {
+      continue;
+    }
+    lines.push(`${key}=${formatEnvValue(secret.value)}`);
+  }
+
+  if (lines.length === 0) {
+    throw new Error("Loopmark secret bundle did not contain any declared secret values.");
+  }
+
+  await mkdir(directory, { recursive: true, mode: 0o700 });
+  await writeFile(secretFile, `${lines.join("\n")}${lines.length > 0 ? "\n" : ""}`, {
+    encoding: "utf8",
+    mode: 0o600
+  });
+}
+
+function assertUniqueSecretEnvKeys(session: NormalizedSession): Map<string, string> {
+  const seenKeys = new Map<string, string>();
+  const envKeyByFieldId = new Map<string, string>();
+
+  for (const field of flattenFields(session)) {
+    if (field.type !== "text" || !field.secret) {
+      continue;
+    }
+
+    const key = secretEnvKeyForFieldId(field.id);
+    const previousFieldId = seenKeys.get(key);
+    if (previousFieldId !== undefined) {
+      throw new Error(`Loopmark secret fields map to duplicate env key: ${key}.`);
+    }
+
+    seenKeys.set(key, field.id);
+    envKeyByFieldId.set(field.id, key);
+  }
+
+  return envKeyByFieldId;
+}
+
+function formatEnvValue(value: string): string {
+  if (/^[A-Za-z0-9_./:@-]+$/.test(value)) {
+    return value;
+  }
+
+  return JSON.stringify(value);
+}
+
+function flattenFields(session: NormalizedSession): NormalizedField[] {
+  return session.groups.flatMap((group) => group.fields);
 }
 
 function apiUrl(baseUrl: string, path: string): string {

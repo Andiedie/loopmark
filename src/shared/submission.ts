@@ -36,7 +36,8 @@ const submittedAnswerSchema = z.discriminatedUnion("type", [
   z
     .object({
       type: z.literal("secret"),
-      value: z.string().nullable()
+      value: z.string().nullable(),
+      note: z.string().nullable().optional()
     })
     .strict(),
   z

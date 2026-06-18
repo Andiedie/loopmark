@@ -1,6 +1,6 @@
 # Loopmark Design
 
-Loopmark is a cloud human-input handoff for AI Agents. It reads a compact JSON question session, opens a public encrypted fill page, and lets the calling agent collect dense human feedback later. The interface is not a form builder, dashboard, survey SaaS, or approval system. It is a quiet, well-set document where a human can review, answer, rank, annotate, and submit with confidence.
+Loopmark is a cloud human-input handoff for AI Agents. It reads a compact JSON question session, opens a public encrypted fill page, and lets the human copy dense Markdown feedback back to the calling agent. The interface is not a form builder, dashboard, survey SaaS, or approval system. It is a quiet, well-set document where a human can review, answer, rank, annotate, and copy with confidence.
 
 ## 1. Design Goal
 
@@ -13,13 +13,13 @@ Design priorities:
 - Preserve enough context that the user knows what the agent is asking and why.
 - Avoid dashboard aesthetics, KPI blocks, heavy cards, bright gradients, and decorative UI.
 - Treat defaults as agent suggestions that the user can edit, not as final truth.
-- Protect sensitive answers by making encrypted transport and local collection-file behavior visible without exposing secret content.
+- Protect sensitive answers by making encrypted transport and local `.env` retrieval visible without exposing secret content.
 
 ## 2. Principles
 
 ### 2.1 Document First
 
-The primary surface is a document with a title, context, chapters, numbered questions, answer controls, choice notes, marginal notes, and a final submit action. Use typography, spacing, and fine rules before panels or cards.
+The primary surface is a document with a title, context, chapters, numbered questions, answer controls, choice notes, marginal notes, and a final copy action. Use typography, spacing, and fine rules before panels or cards.
 
 ### 2.2 Content Before Chrome
 
@@ -31,7 +31,7 @@ Agent-provided defaults are suggestions. Text defaults can be edited directly, c
 
 ### 2.4 State Must Be Explicit
 
-Answered progress, selected choices, validation errors, collapsed groups, secret handling, loading, and submitted states must be visible without making the page feel noisy.
+Answered progress, selected choices, validation errors, collapsed groups, secret handling, loading, and copied states must be visible without making the page feel noisy.
 
 ### 2.5 Compact Output, Rich Context
 
@@ -48,7 +48,7 @@ App Shell
 ├── Top Bar: product name, session title, answered progress
 ├── Outline: grouped-session table of contents only
 ├── Document Workspace: title, description, groups, questions, answer controls
-└── Action Bar: submit action and validation copy
+└── Action Bar: copy action and validation copy
 ```
 
 Rules:
@@ -63,7 +63,7 @@ Rules:
 Core path:
 
 ```text
-Agent creates encrypted session -> human reviews defaults -> human edits answers -> validation points to first issue -> submit -> agent collects JSON
+Agent creates encrypted session -> human reviews defaults -> human edits answers -> validation points to first issue -> copy Markdown -> human pastes Markdown back to agent
 ```
 
 ## 4. Layout
@@ -78,7 +78,7 @@ Agent creates encrypted session -> human reviews defaults -> human edits answers
 - Question anatomy: number -> question line -> optional status icons -> description -> answer control -> validation/notes.
 - The answer control appears below the question line, not in a cramped parallel column.
 - Ungrouped sessions use a broad single-column document. They must not inherit the grouped outline, right note rail, or complex side-by-side chrome.
-- The top bar, document body, and submit action use the same page frame. Avoid full-width header/footer interiors when the document itself is narrower.
+- The top bar, document body, and copy action use the same page frame. Avoid full-width header/footer interiors when the document itself is narrower.
 - The final action area belongs to the document flow and aligns to the document width. It is not a full-width dashboard footer.
 - Section gap: 40px to 56px.
 - Question vertical padding: 20px to 28px.
@@ -253,11 +253,11 @@ Primary document UI should not use visible shadows. Borders and spacing are the 
 
 ## 8. Interaction Patterns
 
-### Review And Submit
+### Review And Copy
 
-The user reviews defaults inline, edits as needed, then submits once. Avoid extra confirmation unless the action becomes destructive or external.
+The user reviews defaults inline, edits as needed, then copies answers once. Avoid extra confirmation unless the action becomes destructive or external.
 
-The submit action is part of the document, aligned to the same page frame as the questions. Do not use a full-width footer with large empty space around a small set of controls.
+The copy action is part of the document, aligned to the same page frame as the questions. Do not use a full-width footer with large empty space around a small set of controls.
 
 ### Validation Recovery
 
@@ -266,8 +266,8 @@ When validation fails:
 - Mark every invalid field.
 - Scroll to the first invalid field.
 - If the field is inside a collapsed group, expand that group first.
-- Do not show a separate first-issue navigation button. The submit attempt itself performs recovery.
-- Keep the action area visually calm: one primary submit action plus concise validation copy.
+- Do not show a separate first-issue navigation button. The copy attempt itself performs recovery.
+- Keep the action area visually calm: one primary copy action plus concise validation copy.
 
 ### Group Collapse
 
@@ -275,7 +275,7 @@ Groups can collapse to reduce complexity. Collapsed headers still show answered 
 
 ### Secret Fields
 
-Secret fields render as password/text areas as appropriate. A lock icon explains that secret content is encrypted before upload, written to a local temporary file during collection, and omitted from stdout. The final JSON references only `secretFile` and `description`.
+Secret fields render as password/text areas as appropriate and include a normal note textarea. A lock icon explains that the secret value is omitted from Markdown, encrypted in the browser, and later downloaded to a local `.env` file with `loopmark secrets`. Notes remain visible in Markdown like other notes.
 
 ## 9. State Design
 
@@ -283,12 +283,13 @@ Required states:
 
 - Loading: centered, quiet, with a small spinner and short text.
 - Error: centered for load/fatal errors; inline for validation errors.
-- Success: tells the user to return to the agent and does not show answer JSON.
+- Success: tells the user to paste the copied Markdown to the agent and does not show answer JSON.
+- Copy fallback: if clipboard access fails after answers are encrypted, show the generated Markdown in a readonly text area so the user can manually copy it.
 - Disabled: reduced opacity, cursor disabled, no hidden layout shift.
 - Validation failed: inline field errors plus automatic first-error reveal.
 - Partial: progress shows answered count.
-- Secret: lock icon plus local-file copy.
-- Submitted: no more editing in the page.
+- Secret: lock icon plus omitted-from-Markdown copy and local `.env` retrieval.
+- Copied: no more editing in the page.
 
 Not in v1:
 
@@ -305,7 +306,7 @@ Tone: professional, direct, sparse.
 Rules:
 
 - Prefer short labels over explanatory paragraphs.
-- Button copy uses clear verbs: `Submit inputs`, `Add`.
+- Button copy uses clear verbs: `Copy answers`, `Add`.
 - Error copy should say what failed and how to recover.
 - Avoid playful or apologetic copy.
 - Do not add visible feature explanations that duplicate obvious controls.

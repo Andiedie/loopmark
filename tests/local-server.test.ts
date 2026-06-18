@@ -1,8 +1,8 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createRemoteSession, collectRemoteResult } from "../src/cli/remote";
-import { createRemoteSessionPackage } from "../src/shared/cloud-protocol";
+import { createRemoteSession } from "../src/cli/remote";
+import { createRemoteSessionPackage, decryptSessionEnvelope, extractSessionCodeFromHash } from "../src/shared/cloud-protocol";
 import { parseInputJson } from "../src/shared/schema";
 import { startLocalLoopmarkServer, type RunningLoopmarkServer } from "../src/server/local-server";
 
@@ -44,7 +44,7 @@ it("serves local web assets and rejects missing or unsafe asset paths", async ()
   await expect((await fetch(`${running.url}/%E0%A4%A`)).status).toBe(404);
 });
 
-it("backs remote create and collect with in-memory local storage", async () => {
+it("backs remote create and encrypted session retrieval with in-memory local storage", async () => {
   tempDir = await createMinimalWebRoot();
   running = await startLocalLoopmarkServer(join(tempDir, "web"));
   const session = parseInputJson(
@@ -57,9 +57,14 @@ it("backs remote create and collect with in-memory local storage", async () => {
   const created = await createRemoteSession(session, { baseUrl: running.url, receiptDir: tempDir });
   expect(created.fillUrl).toMatch(new RegExp(`^${escapeRegExp(running.url)}/s#lm1_`));
 
-  await expect(collectRemoteResult(created.receiptFile, { secretDir: tempDir })).resolves.toEqual({
-    status: "pending",
-    message: "Loopmark session has not been submitted yet."
+  const response = await fetch(`${running.url}/api/sessions/${created.sessionId}`);
+  expect(response.status).toBe(200);
+  const sessionCode = extractSessionCodeFromHash(new URL(created.fillUrl).hash);
+  if (!sessionCode) {
+    throw new Error("Expected session code in fill URL.");
+  }
+  await expect(decryptSessionEnvelope(sessionCode, await response.json())).resolves.toMatchObject({
+    session: { title: "Local try" }
   });
 });
 

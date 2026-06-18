@@ -5,6 +5,7 @@ import {
   zodIssueToAgentError,
   type AgentValidationError
 } from "./errors";
+import { secretEnvKeyForFieldId } from "./secret-env";
 
 export type ChoiceMode = "single" | "multiple" | "ranking";
 
@@ -162,6 +163,7 @@ export function normalizeSession(input: unknown): NormalizedSession {
   );
 
   collectDuplicateFieldErrors(rawGroups, errors);
+  collectDuplicateSecretEnvKeyErrors(rawGroups, errors);
 
   if (errors.length > 0) {
     throw new LoopmarkInputError(errors);
@@ -552,6 +554,37 @@ function collectDuplicateFieldErrors(groups: RawGroupDescriptor[], errors: Agent
         );
       } else {
         seen.set(field.id, path);
+      }
+    });
+  });
+}
+
+function collectDuplicateSecretEnvKeyErrors(groups: RawGroupDescriptor[], errors: AgentValidationError[]) {
+  const seen = new Map<string, { fieldId: string; path: string }>();
+
+  groups.forEach(({ group, fieldPathPrefix }) => {
+    group.fields.forEach((field, fieldIndex) => {
+      if ((field.type ?? "text") !== "text" || !field.secret) {
+        return;
+      }
+
+      const envKey = secretEnvKeyForFieldId(field.id);
+      const path = `${fieldPathPrefix}[${fieldIndex}].id`;
+      const previous = seen.get(envKey);
+
+      if (previous && previous.fieldId !== field.id) {
+        errors.push(
+          makeError({
+            path,
+            code: "duplicate_secret_env_key",
+            message: `Secret field id maps to duplicate env key: ${envKey}.`,
+            why: "The secrets command writes a .env file, and duplicate keys would make one secret overwrite another.",
+            fix: "Rename one secret field id so each generated env key is unique.",
+            example: `${field.id}_${fieldIndex + 1}`
+          })
+        );
+      } else {
+        seen.set(envKey, { fieldId: field.id, path });
       }
     });
   });
