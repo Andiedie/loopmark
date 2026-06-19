@@ -139,13 +139,14 @@ describe("Loopmark UI", () => {
     const styleField = within(document.querySelector("#field-style") as HTMLElement);
     await user.click(styleField.getByRole("button", { name: "Other" }));
     await user.type(styleField.getByLabelText("Other answer for Style"), "Custom direction");
+    await user.click(styleField.getByRole("button", { name: "Add note" }));
     await user.type(styleField.getByLabelText("Note for Style"), "Need something outside the list.");
     await user.click(screen.getByRole("button", { name: /copy answers/i }));
 
     await waitFor(() => expect(screen.getByText("Answers copied")).toBeInTheDocument());
-    expect(clipboard.copiedText()).toContain("## Style");
-    expect(clipboard.copiedText()).toContain("> Custom direction");
-    expect(clipboard.copiedText()).toContain("> Need something outside the list.");
+    expect(clipboard.copiedText()).toContain("Style\nAnswer: Custom direction");
+    expect(clipboard.copiedText()).toContain("Note: Need something outside the list.");
+    expect(clipboard.copiedText()).toContain("Field: style");
     expect(clipboard.copiedText()).not.toContain("npx --yes @andie/loopmark secrets");
     expect(remote.secretUploads).toHaveLength(0);
   });
@@ -203,12 +204,62 @@ describe("Loopmark UI", () => {
     const user = userEvent.setup();
 
     await screen.findByText("Elegant document-like layout.");
-    expect(screen.getByLabelText("Note for Style")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Note for Style")).not.toBeInTheDocument();
+    const styleField = within(document.querySelector("#field-style") as HTMLElement);
+    expect(styleField.getByRole("button", { name: "Add note" })).toHaveAttribute("aria-expanded", "false");
 
     const option = screen.getByRole("button", { name: /Paper Trail/i });
     expect(option).toHaveClass("bg-paper-accent");
     await user.click(option);
     expect(option).not.toHaveClass("bg-paper-accent");
+  });
+
+  it("skips agent-prefilled answers instead of copying defaults", async () => {
+    const prefilledSession = normalizeSession({
+      title: "Prefilled review",
+      fields: [
+        { id: "scope", label: "Scope", type: "text", default: "Agent-proposed scope" },
+        {
+          id: "direction",
+          label: "Direction",
+          type: "choice",
+          default: "Paper Trail",
+          options: [{ label: "Paper Trail", description: "Agent-picked visual direction." }]
+        },
+        {
+          id: "priority",
+          label: "Rank priorities",
+          type: "choice",
+          mode: "ranking",
+          options: ["Alpha", "Beta"]
+        }
+      ]
+    });
+    await renderCloudApp(prefilledSession);
+    const user = userEvent.setup();
+    const clipboard = installClipboard();
+
+    await screen.findByText("Agent-proposed scope");
+    const scopeField = within(document.querySelector("#field-scope") as HTMLElement);
+    const directionField = within(document.querySelector("#field-direction") as HTMLElement);
+    const priorityField = within(document.querySelector("#field-priority") as HTMLElement);
+    await user.click(scopeField.getByRole("button", { name: "Skip answer" }));
+    await user.click(directionField.getByRole("button", { name: "Skip answer" }));
+    await user.click(priorityField.getByRole("button", { name: "Skip answer" }));
+
+    expect(scopeField.getByRole("button", { name: "Answer skipped" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Reset Scope" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /copy answers/i }));
+
+    await waitFor(() => expect(screen.getByText("Answers copied")).toBeInTheDocument());
+    const answerText = clipboard.copiedText();
+    expect(answerText).toContain("Scope\nAnswer: [no answer]\nField: scope");
+    expect(answerText).toContain("Direction\nAnswer: [no answer]\nField: direction");
+    expect(answerText).toContain("Rank priorities\nAnswer: [no answer]\nField: priority");
+    expect(answerText).not.toContain("Agent-proposed scope");
+    expect(answerText).not.toContain("Paper Trail");
+    expect(answerText).not.toContain("Choice 1: Alpha");
   });
 
   it("copies a choice note even after a selected option is cleared", async () => {
@@ -221,6 +272,8 @@ describe("Loopmark UI", () => {
     const clipboard = installClipboard();
 
     await screen.findByText("Decision");
+    const decisionField = within(document.querySelector("#field-decision") as HTMLElement);
+    await user.click(decisionField.getByRole("button", { name: "Add note" }));
     await user.type(screen.getByLabelText("Note for Decision"), "I am skipping the choices for now.");
     const option = screen.getByRole("button", { name: "A" });
     await user.click(option);
@@ -228,8 +281,8 @@ describe("Loopmark UI", () => {
     await user.click(screen.getByRole("button", { name: /copy answers/i }));
 
     await waitFor(() => expect(screen.getByText("Answers copied")).toBeInTheDocument());
-    expect(clipboard.copiedText()).toContain("Answer: _No answer_");
-    expect(clipboard.copiedText()).toContain("> I am skipping the choices for now.");
+    expect(clipboard.copiedText()).toContain("Answer: [no answer]");
+    expect(clipboard.copiedText()).toContain("Note: I am skipping the choices for now.");
   });
 
   it("treats a blank Other selection as no answer for single choice", async () => {
@@ -251,7 +304,7 @@ describe("Loopmark UI", () => {
     await user.click(screen.getByRole("button", { name: /copy answers/i }));
 
     await waitFor(() => expect(screen.getByText("Answers copied")).toBeInTheDocument());
-    expect(clipboard.copiedText()).toContain("Answer: _No answer_");
+    expect(clipboard.copiedText()).toContain("Answer: [no answer]");
   });
 
   it("lets ranking items be removed without adding Other to ranking", async () => {
@@ -280,8 +333,8 @@ describe("Loopmark UI", () => {
     await user.click(screen.getByRole("button", { name: /copy answers/i }));
 
     await waitFor(() => expect(screen.getByText("Answers copied")).toBeInTheDocument());
-    expect(clipboard.copiedText()).toContain("> Beta");
-    expect(clipboard.copiedText()).not.toContain("> Alpha");
+    expect(clipboard.copiedText()).toContain("Choice 1: Beta");
+    expect(clipboard.copiedText()).not.toContain("Choice 1: Alpha");
   });
 
   it("copies notes for ranking questions", async () => {
@@ -302,13 +355,15 @@ describe("Loopmark UI", () => {
     const clipboard = installClipboard();
 
     await screen.findByText("Rank priorities");
+    const priorityField = within(document.querySelector("#field-priority") as HTMLElement);
+    await user.click(priorityField.getByRole("button", { name: "Add note" }));
     await user.type(screen.getByLabelText("Note for Rank priorities"), "Alpha is first because it is lower risk.");
     await user.click(screen.getByRole("button", { name: /copy answers/i }));
 
     await waitFor(() => expect(screen.getByText("Answers copied")).toBeInTheDocument());
-    expect(clipboard.copiedText()).toContain("> Alpha");
-    expect(clipboard.copiedText()).toContain("> Beta");
-    expect(clipboard.copiedText()).toContain("> Alpha is first because it is lower risk.");
+    expect(clipboard.copiedText()).toContain("Choice 1: Alpha");
+    expect(clipboard.copiedText()).toContain("Choice 2: Beta");
+    expect(clipboard.copiedText()).toContain("Note: Alpha is first because it is lower risk.");
   });
 
   it("resets a changed field after confirmation", async () => {
@@ -317,12 +372,12 @@ describe("Loopmark UI", () => {
 
     const user = userEvent.setup();
 
-    const notes = await screen.findByLabelText(/Notes/);
+    const notes = await screen.findByRole("textbox", { name: "Notes" });
     await user.type(notes, "Temporary edit");
     await user.click(screen.getByRole("button", { name: "Reset Notes" }));
 
     expect(confirmMock).toHaveBeenCalled();
-    expect(notes).toHaveValue("");
+    expect(screen.getByRole("textbox", { name: "Notes" })).toHaveValue("");
   });
 
   it("shows the load error screen when the session request fails", async () => {
@@ -353,7 +408,7 @@ describe("Loopmark UI", () => {
     expect(await screen.findByRole("heading", { name: "Loopmark" })).toBeInTheDocument();
     expect(screen.getByText("Structured human input for AI agents.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Copy install command" })).toBeInTheDocument();
-    expect(screen.getAllByText(/copy traceable Markdown/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/copy traceable answer text/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/encrypted secret bundle/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/local \.env file/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Private deployments are supported/i)).toBeInTheDocument();
@@ -398,8 +453,9 @@ describe("Loopmark UI", () => {
     expect(screen.getByText("Ship the smallest reliable path today.")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: /04\s*Resume/i }));
-    expect(screen.getByText(/# Need product direction Answers/)).toBeInTheDocument();
-    expect(screen.getByText(/> Smallest viable change/)).toBeInTheDocument();
+    expect(screen.getByText(/Need product direction Answers/)).toBeInTheDocument();
+    expect(screen.getByText(/Answer: Smallest viable change/)).toBeInTheDocument();
+    expect(screen.getByText(/Field: scope/)).toBeInTheDocument();
     expect(screen.queryByText(/npx --yes @andie\/loopmark secrets s_xxx/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Secret handling lane")).not.toBeInTheDocument();
 
@@ -415,11 +471,11 @@ describe("Loopmark UI", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /02\s*Loopmark form/i }));
     expect(screen.getByText("Optional API token")).toBeInTheDocument();
-    expect(screen.getByText("This value is omitted from Markdown.")).toBeInTheDocument();
+    expect(screen.getByText("This value is omitted from Answer Text.")).toBeInTheDocument();
     expect(screen.queryByText("secret value")).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: /04\s*Resume/i }));
-    expect(screen.getByText(/Answer: _Secret omitted from Markdown\._/)).toBeInTheDocument();
+    expect(screen.getByText(/Answer: \[secret omitted\]/)).toBeInTheDocument();
     expect(screen.getByText(/npx --yes @andie\/loopmark secrets s_xxx/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Loopmark server/i })).not.toBeInTheDocument();
   });
@@ -501,7 +557,7 @@ describe("Loopmark UI", () => {
     expect(screen.getByText("Loopmark session envelope does not match the link.")).toBeInTheDocument();
   });
 
-  it("copies traceable Markdown and uploads secret answers separately", async () => {
+  it("copies traceable Answer Text and uploads secret answers separately", async () => {
     const secretSession = normalizeSession({
       title: "Secret review",
       fields: [
@@ -513,22 +569,22 @@ describe("Loopmark UI", () => {
     const user = userEvent.setup();
     const clipboard = installClipboard();
 
-    await user.type(await screen.findByLabelText(/Notes/), "Ready to copy");
+    await user.type(await screen.findByRole("textbox", { name: "Notes" }), "Ready to copy");
     await user.type(screen.getByLabelText("Local token"), "secret-token");
+    const tokenField = within(document.querySelector("#field-token") as HTMLElement);
+    await user.click(tokenField.getByRole("button", { name: "Add note" }));
     await user.type(screen.getByLabelText("Note for Local token"), "Use this only for the staging API.");
     await user.click(screen.getByRole("button", { name: /copy answers/i }));
 
     await waitFor(() => expect(screen.getByText("Answers copied")).toBeInTheDocument());
-    const markdown = clipboard.copiedText();
-    expect(markdown).toContain("# Secret review Answers");
-    expect(markdown).toContain("## Notes");
-    expect(markdown).toContain("> Ready to copy");
-    expect(markdown).toContain("## Local token");
-    expect(markdown).toContain("> Use this only for the staging API.");
-    expect(markdown).toContain("npx --yes @andie/loopmark secrets");
-    expect(markdown).toContain(remote.sessionId);
-    expect(markdown).not.toContain("```loopmark-answer");
-    expect(markdown).not.toContain("secret-token");
+    const answerText = clipboard.copiedText();
+    expect(answerText).toContain("Secret review Answers");
+    expect(answerText).toContain("Notes\nAnswer: Ready to copy\nField: notes");
+    expect(answerText).toContain("Local token\nAnswer: [secret omitted]\nNote: Use this only for the staging API.\nField: token");
+    expect(answerText).toContain("npx --yes @andie/loopmark secrets");
+    expect(answerText).toContain(remote.sessionId);
+    expect(answerText).not.toContain("```loopmark-answer");
+    expect(answerText).not.toContain("secret-token");
     expect(remote.secretUploads).toHaveLength(1);
     await expect(decryptFirstSecretUpload(remote)).resolves.toEqual({
       secrets: {
@@ -561,7 +617,32 @@ describe("Loopmark UI", () => {
     });
   });
 
-  it("shows a manual Markdown fallback when clipboard writing fails without leaking secrets", async () => {
+  it("skips a secret answer without uploading its value or note", async () => {
+    const secretSession = normalizeSession({
+      title: "Secret review",
+      fields: [{ id: "token", label: "Local token", type: "text", secret: true }]
+    });
+    const remote = await renderCloudApp(secretSession);
+    const user = userEvent.setup();
+    const clipboard = installClipboard();
+
+    await user.type(await screen.findByLabelText("Local token"), "secret-token");
+    const tokenField = within(document.querySelector("#field-token") as HTMLElement);
+    await user.click(tokenField.getByRole("button", { name: "Add note" }));
+    await user.type(screen.getByLabelText("Note for Local token"), "Use this only for staging.");
+    await user.click(tokenField.getByRole("button", { name: "Skip answer" }));
+    expect(screen.queryByLabelText("Note for Local token")).not.toBeInTheDocument();
+    expect(tokenField.getByRole("button", { name: "Answer skipped" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: /copy answers/i }));
+
+    await waitFor(() => expect(screen.getByText("Answers copied")).toBeInTheDocument());
+    expect(clipboard.copiedText()).toContain("Local token\nAnswer: [no secret value provided]\nField: token");
+    expect(clipboard.copiedText()).not.toContain("Use this only for staging.");
+    expect(clipboard.copiedText()).not.toContain("npx --yes @andie/loopmark secrets");
+    expect(remote.secretUploads).toHaveLength(0);
+  });
+
+  it("shows a manual Answer Text fallback when clipboard writing fails without leaking secrets", async () => {
     const secretSession = normalizeSession({
       title: "Secret review",
       fields: [
@@ -580,17 +661,17 @@ describe("Loopmark UI", () => {
       }
     });
 
-    await user.type(await screen.findByLabelText(/Notes/), "Ready to copy");
+    await user.type(await screen.findByRole("textbox", { name: "Notes" }), "Ready to copy");
     await user.type(screen.getByLabelText("Local token"), "secret-token");
     await user.click(screen.getByRole("button", { name: /copy answers/i }));
 
     expect(await screen.findByText("Answers ready")).toBeInTheDocument();
     expect(screen.getByText("clipboard denied")).toBeInTheDocument();
-    const fallback = screen.getByLabelText("Answer Markdown");
-    const markdown = (fallback as HTMLTextAreaElement).value;
-    expect(markdown).toContain("npx --yes @andie/loopmark secrets");
-    expect(markdown).not.toContain("secret-token");
-    expect(markdown).not.toContain("```loopmark-answer");
+    const fallback = screen.getByLabelText("Answer Text");
+    const answerText = (fallback as HTMLTextAreaElement).value;
+    expect(answerText).toContain("npx --yes @andie/loopmark secrets");
+    expect(answerText).not.toContain("secret-token");
+    expect(answerText).not.toContain("```loopmark-answer");
   });
 
   it("shows a preparation error when secret upload fails", async () => {
@@ -611,7 +692,7 @@ describe("Loopmark UI", () => {
     expect(screen.getByText("R2 unavailable")).toBeInTheDocument();
   });
 
-  it("keeps a secret field's normal note in Markdown without uploading secrets", async () => {
+  it("keeps a secret field's normal note in Answer Text without uploading secrets", async () => {
     const secretSession = normalizeSession({
       title: "Secret review",
       fields: [{ id: "token", label: "Local token", type: "text", secret: true }]
@@ -620,11 +701,14 @@ describe("Loopmark UI", () => {
     const user = userEvent.setup();
     const clipboard = installClipboard();
 
-    await user.type(await screen.findByLabelText("Note for Local token"), "Public note without a value.");
+    await screen.findByText("Local token");
+    const tokenField = within(document.querySelector("#field-token") as HTMLElement);
+    await user.click(await tokenField.findByRole("button", { name: "Add note" }));
+    await user.type(screen.getByLabelText("Note for Local token"), "Public note without a value.");
     await user.click(screen.getByRole("button", { name: /copy answers/i }));
 
     await waitFor(() => expect(screen.getByText("Answers copied")).toBeInTheDocument());
-    expect(clipboard.copiedText()).toContain("> Public note without a value.");
+    expect(clipboard.copiedText()).toContain("Note: Public note without a value.");
     expect(clipboard.copiedText()).not.toContain(`npx --yes @andie/loopmark secrets ${remote.sessionId}`);
     expect(remote.secretUploads).toHaveLength(0);
   });
@@ -635,7 +719,7 @@ describe("Loopmark UI", () => {
 
     const user = userEvent.setup();
 
-    const notes = await screen.findByLabelText(/Notes/);
+    const notes = await screen.findByRole("textbox", { name: "Notes" });
     await user.type(notes, "Keep this edit");
     await user.click(screen.getByRole("button", { name: "Reset Notes" }));
 
@@ -736,7 +820,7 @@ describe("Loopmark UI", () => {
 
     const input = await screen.findByLabelText("Local token");
     expect(input).toHaveAttribute("type", "password");
-    expect(screen.getByText("Secret value is omitted from Markdown and later written to a local file by the agent.")).toBeInTheDocument();
+    expect(screen.getByText("Secret value is omitted from the copied answer text and later written to a local file by the agent.")).toBeInTheDocument();
 
     await user.type(input, "secret-token");
     await user.click(screen.getByRole("button", { name: "Show Local token" }));

@@ -37,6 +37,7 @@ import {
 import type { NormalizedChoiceField, NormalizedField, NormalizedGroup, NormalizedSession } from "../shared/schema";
 import {
   getInitialAnswer,
+  getEmptyAnswer,
   isSecretValuePresent,
   isAnswerPresent,
   normalizeChoiceItems,
@@ -46,7 +47,7 @@ import {
   type SubmittedAnswer
 } from "../shared/answer-state";
 import { fieldErrorsFromSubmitReport, validateSubmitPayload } from "../shared/submission";
-import { createAnswerMarkdown } from "../shared/answer-markdown";
+import { createAnswerText } from "../shared/answer-text";
 import {
   assertSessionEnvelope,
   createSecretBundleSubmission,
@@ -77,7 +78,7 @@ type AnswerExportState =
   | { status: "editing" }
   | { status: "copying" }
   | { status: "copied" }
-  | { status: "manual"; markdown: string; error: string; copying: boolean }
+  | { status: "manual"; answerText: string; error: string; copying: boolean }
   | { status: "error"; message: string };
 
 class TextInputSafeKeyboardSensor extends KeyboardSensor {
@@ -193,6 +194,12 @@ export function App() {
     setFieldResetVersions((current) => ({ ...current, [field.id]: (current[field.id] ?? 0) + 1 }));
   }
 
+  function skipField(field: NormalizedField) {
+    setAnswers((current) => ({ ...current, [field.id]: getEmptyAnswer(field) }));
+    setFieldErrors((current) => ({ ...current, [field.id]: undefined }));
+    setFieldResetVersions((current) => ({ ...current, [field.id]: (current[field.id] ?? 0) + 1 }));
+  }
+
   function toggleGroup(groupId: string) {
     setCollapsedGroups((current) => ({ ...current, [groupId]: !current[groupId] }));
   }
@@ -229,18 +236,18 @@ export function App() {
     }
 
     setAnswerExport({ status: "copying" });
-    let markdown: string | null = null;
+    let answerText: string | null = null;
     try {
-      markdown = await buildAnswerMarkdown();
-      await writeClipboardText(markdown);
+      answerText = await buildAnswerText();
+      await writeClipboardText(answerText);
       setAnswerExport({ status: "copied" });
     } catch (error) {
       const message = errorMessage(error, "Unable to copy answers.");
-      setAnswerExport(markdown ? { status: "manual", markdown, error: message, copying: false } : { status: "error", message });
+      setAnswerExport(answerText ? { status: "manual", answerText, error: message, copying: false } : { status: "error", message });
     }
   }
 
-  async function buildAnswerMarkdown(): Promise<string> {
+  async function buildAnswerText(): Promise<string> {
     if (!remoteSession || !session || !sessionCode) {
       throw new Error("Loopmark session is not ready.");
     }
@@ -261,22 +268,22 @@ export function App() {
       await uploadSecretBundle(remoteSession.sessionId, submission);
     }
 
-    return createAnswerMarkdown({
+    return createAnswerText({
       sessionId: remoteSession.sessionId,
       session,
       payload: { answers }
     });
   }
 
-  async function copyPreparedMarkdown(markdown: string, previousError: string) {
-    setAnswerExport({ status: "manual", markdown, error: previousError, copying: true });
+  async function copyPreparedAnswerText(answerText: string, previousError: string) {
+    setAnswerExport({ status: "manual", answerText, error: previousError, copying: true });
     try {
-      await writeClipboardText(markdown);
+      await writeClipboardText(answerText);
       setAnswerExport({ status: "copied" });
     } catch (error) {
       setAnswerExport({
         status: "manual",
-        markdown,
+        answerText,
         error: errorMessage(error, "Unable to copy answers."),
         copying: false
       });
@@ -287,18 +294,18 @@ export function App() {
     return (
       <MessageScreen
         title="Answers copied"
-        message="Paste the copied Markdown back to the agent."
+        message="Paste the copied answer text back to the agent."
       />
     );
   }
 
   if (answerExport.status === "manual") {
     return (
-      <AnswerMarkdownScreen
-        markdown={answerExport.markdown}
+      <AnswerTextScreen
+        answerText={answerExport.answerText}
         error={answerExport.error}
         copying={answerExport.copying}
-        onCopy={() => copyPreparedMarkdown(answerExport.markdown, answerExport.error)}
+        onCopy={() => copyPreparedAnswerText(answerExport.answerText, answerExport.error)}
       />
     );
   }
@@ -393,6 +400,7 @@ export function App() {
                           resetVersion={fieldResetVersions[field.id] ?? 0}
                           onChange={(answer) => updateAnswer(field.id, answer)}
                           onReset={() => resetField(field)}
+                          onSkip={() => skipField(field)}
                         />
                       ))}
                     </div>
@@ -443,6 +451,7 @@ export function App() {
                           resetVersion={fieldResetVersions[field.id] ?? 0}
                           onChange={(answer) => updateAnswer(field.id, answer)}
                           onReset={() => resetField(field)}
+                          onSkip={() => skipField(field)}
                         />
                       ))}
                     </div>
@@ -473,7 +482,7 @@ function ActionBar(input: {
   return (
     <div className="mt-8 flex flex-col gap-4 border-t border-paper-line py-6 md:flex-row md:items-center md:justify-between">
       <p className="max-w-xl text-sm leading-6 text-paper-muted">
-        {hasErrors ? "Fix the highlighted questions before continuing." : "Review your answers, then copy the Markdown back to the agent."}
+        {hasErrors ? "Fix the highlighted questions before continuing." : "Review your answers, then copy the answer text back to the agent."}
       </p>
       <div className="flex flex-wrap gap-3">
         <Button type="button" variant="primary" onClick={onCopy} disabled={copying}>
@@ -496,9 +505,11 @@ function FieldBlock(input: {
   resetVersion: number;
   onChange: (answer: SubmittedAnswer) => void;
   onReset: () => void;
+  onSkip: () => void;
 }) {
-  const { field, index, simple, first, answer, error, dirty, resetVersion, onChange, onReset } = input;
+  const { field, index, simple, first, answer, error, dirty, resetVersion, onChange, onReset, onSkip } = input;
   const suggestionActive = isDefaultSuggestionActive(field, answer);
+  const answerPresent = isAnswerPresent(field, answer);
   const hasStatusSlot = (field.type === "text" && field.secret) || hasDefaultSuggestion(field);
   const statusIcon = field.type === "text" && field.secret ? <SecretHint /> : suggestionActive ? <SuggestionHint /> : null;
   const labelId = `field-${field.id}-label`;
@@ -519,7 +530,7 @@ function FieldBlock(input: {
       <div className="pt-1 font-serif text-sm tabular-nums text-paper-muted">{index}</div>
       <div className="min-w-0">
         <div
-          className="grid min-h-9 grid-cols-[minmax(0,1fr)_2.25rem] items-start gap-3"
+          className="grid min-h-9 grid-cols-[minmax(0,1fr)_auto] items-start gap-3"
           data-testid={`field-${field.id}-header`}
         >
           <div className="flex min-h-9 min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
@@ -538,7 +549,21 @@ function FieldBlock(input: {
               </span>
             ) : null}
           </div>
-          <div className="flex h-9 w-9 items-center justify-center">
+          <div className="flex h-9 items-center justify-end gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 w-24 px-2 text-paper-muted hover:text-paper-ink"
+              aria-label={answerPresent ? "Skip answer" : "Answer skipped"}
+              aria-describedby={labelId}
+              title={answerPresent ? "Mark this question as unanswered" : "This question is unanswered"}
+              disabled={!answerPresent}
+              onClick={onSkip}
+            >
+              <X aria-hidden />
+              {answerPresent ? "Skip" : "Skipped"}
+            </Button>
             {dirty ? (
               <Button type="button" variant="ghost" size="icon" aria-label={`Reset ${field.label}`} title="Reset answer" onClick={onReset}>
                 <RotateCcw aria-hidden />
@@ -552,12 +577,12 @@ function FieldBlock(input: {
         <div className="mt-3">
           {field.type === "text" ? (
             <TextField
+              key={resetVersion}
               field={field}
               answer={answer}
               onChange={onChange}
               invalid={Boolean(error)}
               describedBy={describedBy}
-              resetVersion={resetVersion}
             />
           ) : (
             <ChoiceField
@@ -604,7 +629,7 @@ function SecretHint() {
       <Lock aria-hidden className="size-4" />
       <span className="sr-only">Secret answer is encrypted before copy.</span>
       <span className="pointer-events-none absolute left-1/2 top-7 z-30 hidden w-56 -translate-x-1/2 border border-paper-line bg-white px-3 py-2 text-xs leading-5 text-paper-muted shadow-sm group-hover:block group-focus-within:block">
-        Secret value is omitted from Markdown and later written to a local file by the agent.
+        Secret value is omitted from the copied answer text and later written to a local file by the agent.
       </span>
     </span>
   );
@@ -615,10 +640,9 @@ function TextField(input: {
   answer: SubmittedAnswer | undefined;
   invalid: boolean;
   describedBy?: string;
-  resetVersion: number;
   onChange: (answer: SubmittedAnswer) => void;
 }) {
-  const { field, answer, invalid, describedBy, resetVersion, onChange } = input;
+  const { field, answer, invalid, describedBy, onChange } = input;
   const value = answer?.type === (field.secret ? "secret" : "text") ? answer.value ?? "" : "";
   const note = answer?.type === "secret" ? answer.note ?? "" : "";
   const update = (nextValue: string) => {
@@ -652,7 +676,6 @@ function TextField(input: {
   return (
     <div className="flex flex-col gap-4">
       <SecretTextAnswer
-        key={resetVersion}
         field={field}
         value={value}
         invalid={invalid}
@@ -738,23 +761,15 @@ function TextNote(input: {
   onChange: (value: string) => void;
 }) {
   const { field, value, onChange } = input;
-  const id = `${field.id}-note`;
 
   return (
-    <div className="max-w-3xl">
-      <label htmlFor={id} className="text-xs font-semibold uppercase tracking-[0.14em] text-paper-muted">
-        Note
-      </label>
-      <Textarea
-        id={id}
-        aria-label={`Note for ${field.label}`}
-        placeholder="Why this answer, or why you skipped it"
-        rows={3}
-        className="mt-2 min-h-20 resize-y py-2 leading-5"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </div>
+    <CollapsibleNote
+      id={`${field.id}-note`}
+      label={field.label}
+      describedBy={`field-${field.id}-label`}
+      value={value}
+      onChange={onChange}
+    />
   );
 }
 
@@ -917,22 +932,56 @@ function ChoiceNote(input: {
   onChange: (value: string) => void;
 }) {
   const { field, value, onChange } = input;
-  const id = `${field.id}-note`;
+
+  return (
+    <CollapsibleNote
+      id={`${field.id}-note`}
+      label={field.label}
+      describedBy={`field-${field.id}-label`}
+      value={value}
+      onChange={onChange}
+    />
+  );
+}
+
+function CollapsibleNote(input: {
+  id: string;
+  label: string;
+  describedBy: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const { id, label, describedBy, value, onChange } = input;
+  const hasNote = normalizeTextAnswer(value) !== null;
+  const [open, setOpen] = useState(hasNote);
 
   return (
     <div className="max-w-3xl">
-      <label htmlFor={id} className="text-xs font-semibold uppercase tracking-[0.14em] text-paper-muted">
-        Note
-      </label>
-      <Textarea
-        id={id}
-        aria-label={`Note for ${field.label}`}
-        placeholder="Why this answer, or why you skipped it"
-        rows={3}
-        className="mt-2 min-h-20 resize-y py-2 leading-5"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="px-0 text-paper-muted hover:bg-transparent hover:text-paper-ink"
+        aria-expanded={open}
+        aria-controls={id}
+        aria-label={open ? "Hide note" : hasNote ? "Edit note" : "Add note"}
+        aria-describedby={describedBy}
+        onClick={() => setOpen((current) => !current)}
+      >
+        {open ? <ChevronDown aria-hidden /> : <ChevronRight aria-hidden />}
+        {open ? "Note" : hasNote ? "Note added" : "Add note"}
+      </Button>
+      {open ? (
+        <Textarea
+          id={id}
+          aria-label={`Note for ${label}`}
+          placeholder="Why this answer, or why you skipped it"
+          rows={3}
+          className="mt-2 min-h-20 resize-y py-2 leading-5"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -1096,13 +1145,13 @@ function MessageScreen(input: { title: string; message: string; loading?: boolea
   );
 }
 
-function AnswerMarkdownScreen(input: {
-  markdown: string;
+function AnswerTextScreen(input: {
+  answerText: string;
   error: string;
   copying: boolean;
   onCopy: () => void;
 }) {
-  const { markdown, error, copying, onCopy } = input;
+  const { answerText, error, copying, onCopy } = input;
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-paper-50 px-5 py-10 text-paper-ink">
@@ -1113,18 +1162,18 @@ function AnswerMarkdownScreen(input: {
         <div className="text-center">
           <h1 className="font-serif text-4xl">Answers ready</h1>
           <p className="mt-4 text-base leading-7 text-paper-muted">{error}</p>
-          <p className="mt-2 text-sm leading-6 text-paper-muted">Select the Markdown below and paste it back to the agent.</p>
+          <p className="mt-2 text-sm leading-6 text-paper-muted">Select the answer text below and paste it back to the agent.</p>
         </div>
         <div className="mt-8">
-          <label htmlFor="answer-markdown" className="text-xs font-semibold uppercase tracking-[0.14em] text-paper-muted">
-            Answer Markdown
+          <label htmlFor="answer-text" className="text-xs font-semibold uppercase tracking-[0.14em] text-paper-muted">
+            Answer Text
           </label>
           <Textarea
-            id="answer-markdown"
+            id="answer-text"
             readOnly
             rows={14}
             className="mt-2 min-h-80 resize-y font-mono text-xs leading-5"
-            value={markdown}
+            value={answerText}
             onFocus={(event) => event.currentTarget.select()}
           />
         </div>

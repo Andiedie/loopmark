@@ -5,8 +5,8 @@
 Loopmark has one cloud create command and one local secret download command:
 
 1. Create a cloud session from JSON on stdin.
-2. Read the pasted Markdown answer directly.
-3. Download omitted secrets later with the local receipt file only if the Markdown includes a secrets section.
+2. Read the pasted Answer Text directly.
+3. Download omitted secrets later with the local receipt file only if the Answer Text includes a secrets section.
 
 Create with inline stdin:
 
@@ -37,35 +37,29 @@ Create stderr may repeat the URL and receipt path for human readability. Do not 
 
 Keep the `receiptFile` path local. It contains the secret decryption key and is required for `secrets`.
 
-After the human opens the fill URL, answers in the browser, clicks Copy answers, and pastes the copied Markdown back to chat, read non-secret answers directly from that Markdown. Do not ask the human to paste only "done" or a short retrieval token; the Markdown is the durable conversation record.
+After the human opens the fill URL, answers in the browser, clicks Copy answers, and pastes the copied Answer Text back to chat, read non-secret answers directly from that Answer Text. Do not ask the human to paste only "done" or a short retrieval token; the Answer Text is the durable conversation record.
 
-If the Markdown says secrets were omitted, download the encrypted secret bundle by session id:
+If the Answer Text says secrets were omitted, download the encrypted secret bundle by session id:
 
 ```bash
 npx --yes @andie/loopmark secrets s_xxx
 ```
 
-The Markdown includes a human-readable answer summary. Secret values are omitted and replaced by a command when a secret value was entered. Notes remain visible in Markdown.
+The Answer Text includes a human-readable answer summary. Secret values are omitted and replaced by a command when a secret value was entered. Notes remain visible in Answer Text.
 
-````markdown
-## Scope
+```text
+Scope
+Answer: Keep the smallest viable change.
+Field: scope
 
-Answer:
+API token
+Answer: [secret omitted]
+Field: api_token
 
-> Keep the smallest viable change.
-
-## API token
-
-Answer: _Secret omitted from Markdown._
-
-## Secrets
-
-Secret answers were omitted from this Markdown. Run this command on the agent machine to download them:
-
-```sh
+Secrets
+Secret values were omitted. Run this on the agent machine:
 npx --yes @andie/loopmark secrets s_xxx
 ```
-````
 
 Secret download stdout is:
 
@@ -74,17 +68,21 @@ Secret download stdout is:
   "status": "secrets_downloaded",
   "sessionId": "s_xxx",
   "secretFile": "/tmp/loopmark-s_xxx/secrets.env",
-  "format": "env"
+  "format": "env",
+  "preview": {
+    "kind": "env_redacted",
+    "text": "api_token=<redacted>\n"
+  }
 }
 ```
 
-The secret file is `.env` style:
+The redacted preview shows the `.env` keys without exposing values. The actual secret file is `.env` style:
 
 ```dotenv
 api_token=secret-value
 ```
 
-Do not poll. Run `secrets` only after the human pastes copied Markdown that says secrets were omitted.
+Do not poll. Run `secrets` only after the human pastes copied Answer Text that says secrets were omitted.
 
 Use another Loopmark server with:
 
@@ -105,7 +103,7 @@ npx --yes @andie/loopmark secrets s_xxx --receipt /path/to/s_xxx.receipt.json --
 
 The public fill URL contains only a session code in the URL hash. The local receipt file contains the secret decryption key. Do not share receipt files in chat, logs, commits, issue comments, or messages to the human.
 
-The Worker and R2 store encrypted session envelopes and encrypted secret bundles only. Non-secret answers and notes are not posted to or stored by the Worker; they exist in the pasted Markdown conversation. Secret values are encrypted in the browser, uploaded as ciphertext, decrypted during `secrets`, written to a local `.env` file, and omitted from stdout.
+The Worker and R2 store encrypted session envelopes and encrypted secret bundles only. Non-secret answers and notes are not posted to or stored by the Worker; they exist in the pasted Answer Text conversation. Secret values are encrypted in the browser, uploaded as ciphertext, decrypted during `secrets`, written to a local `.env` file, and omitted from stdout.
 
 ## Session Object
 
@@ -135,9 +133,10 @@ Grouped sessions use:
 }
 ```
 
-Field ids must be unique across the whole session. Prefer stable `snake_case` ids because the pasted Markdown and secret `.env` file both refer to field ids.
+Field ids must be unique across the whole session. Prefer stable `snake_case` ids because the pasted Answer Text and secret `.env` file both refer to field ids.
 
 All fields are optional.
+The fill page lets the human skip any field. Skipping clears the field's text, selected choices, ranking, secret value, and note so agent-provided defaults are not copied back as answers.
 
 ## Text Fields
 
@@ -157,11 +156,11 @@ Supported text keys:
 
 - `multiline`: render a textarea.
 - `default`: string only.
-- `secret`: omit the submitted value from Markdown, encrypt it in the browser, and later write it to a local `.env` file with `loopmark secrets`.
+- `secret`: omit the submitted value from Answer Text, encrypt it in the browser, and later write it to a local `.env` file with `loopmark secrets`.
 
 Do not set `default` on secret fields.
 
-Secret text fields also include a normal note textarea in the fill page. The note is visible in Markdown like other notes and is not written to the secret `.env` file.
+Secret text fields also include a collapsed public note control in the fill page. When expanded and filled, the note is visible in Answer Text like other notes and is not written to the secret `.env` file.
 
 Secret field example:
 
@@ -210,60 +209,47 @@ For `single` and `multiple` choice fields, Loopmark always adds a system `Other`
 
 For `ranking` fields with no explicit default, Loopmark initially ranks all options in the provided order.
 
-Single, multiple, and ranking choice fields also include a note textarea in the fill page. The human can explain why they chose an option, why they reordered items, or why they skipped the question.
+Single, multiple, and ranking choice fields also include a collapsed note control in the fill page. The human can expand it to explain why they chose an option, why they reordered items, or why they skipped the question.
 
-## Pasted Markdown Shape
+## Pasted Answer Text Shape
 
-Text answers are visible in Markdown:
+Text answers are visible in Answer Text. The field label is the question text, and the field id is kept as secondary metadata:
 
-```markdown
-## What context should I preserve?
-
-Field:
-
-> context
-
-Answer:
-
-> Keep the implementation small.
+```text
+What context should I preserve?
+Answer: Keep the implementation small.
+Field: context
 ```
 
 Single choice answers include the selected label and optional description:
 
-```markdown
-## Which direction should I implement?
-
-Field:
-
-> direction
-
-Answer:
-
-Label:
-
-> Smallest compatible package change
+```text
+Which direction should I implement?
+Answer: Smallest compatible package change
+Details: Publish the bundled skill and README instructions.
+Field: direction
 ```
 
-Multiple and ranking choice answers list each choice. Ranking order is the Markdown order.
+Multiple and ranking choice answers list each choice. Ranking order is the Answer Text order.
 
 Choice answers may include a note:
 
-```markdown
-Note:
-
-> This keeps the change small enough to review today.
+```text
+Rank priorities
+Answer:
+Choice 1: Beta
+Details 1: Most urgent user-visible fix.
+Choice 2: Alpha
+Note: This keeps the change small enough to review today.
+Field: priority
 ```
 
-Secret answers are omitted from Markdown:
+Secret answers are omitted from Answer Text:
 
-```markdown
-## Optional API token
-
-Field:
-
-> api_token
-
-Answer: _Secret omitted from Markdown._
+```text
+Optional API token
+Answer: [secret omitted]
+Field: api_token
 ```
 
 After running `loopmark secrets`, secret values are written to the reported `.env` file. Read that file only when the task requires the value. Do not paste secret values into chat, logs, commits, or non-secret outputs.

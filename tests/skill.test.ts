@@ -89,10 +89,10 @@ describe("bundled Loopmark skill", () => {
     expect(readme).not.toContain("npx @andie/loopmark secrets s_xxx");
   });
 
-  it("keeps design documentation aligned with pasted Markdown transport", () => {
+  it("keeps design documentation aligned with pasted Answer Text transport", () => {
     const design = readFixture("../DESIGN.md");
 
-    expect(design).toContain("copy Markdown");
+    expect(design).toContain("copy Answer Text");
     expect(design).toContain("local `.env` retrieval");
     expect(design).toContain("## Detailed Layout Constraints");
     expect(design).toContain("Modals and drawers are not part of v1");
@@ -123,10 +123,14 @@ describe("bundled Loopmark skill", () => {
     expect(protocol).toContain("Create with file redirection");
     expect(protocol).toContain("npx --yes @andie/loopmark secrets s_xxx");
     expect(protocol).toContain("secretFile");
-    expect(protocol).toContain("normal note textarea");
+    expect(protocol).toContain("preview");
+    expect(protocol).toContain("api_token=<redacted>");
+    expect(protocol).toContain("collapsed public note control");
     expect(protocol).toContain("All fields are optional");
     expect(protocol).toContain("Loopmark always adds a system `Other` option");
     expect(protocol).toContain("Choice answers may include a note");
+    expect(protocol).toContain("## Pasted Answer Text Shape");
+    expect(protocol).toContain("Answer: [secret omitted]");
     expect(protocol).not.toContain("`required`");
     expect(protocol).not.toContain("allowCustom");
     expect(protocol).not.toContain("editable");
@@ -162,7 +166,7 @@ describe("bundled Loopmark skill", () => {
     expect(agents).toContain("docs/operations/cloudflare.md");
     expect(agents).toContain("pnpm exec vitest run tests/skill.test.ts --coverage=false");
     expect(context).toContain("R2 stores encrypted session envelopes");
-    expect(context).toContain("Answer Markdown");
+    expect(context).toContain("Answer Text");
     expect(context).toContain("pnpm exec vitest run tests/skill.test.ts --coverage=false");
     expect(documentation).toContain("Treat `skills/loopmark/**` as published product protocol");
     expect(documentation).not.toContain("## Reseed Backup");

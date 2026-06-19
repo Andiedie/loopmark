@@ -55,6 +55,18 @@ export function getInitialAnswer(field: NormalizedField): SubmittedAnswer {
   };
 }
 
+export function getEmptyAnswer(field: NormalizedField): SubmittedAnswer {
+  if (field.type === "text" && field.secret) {
+    return { type: "secret", value: null };
+  }
+
+  if (field.type === "text") {
+    return { type: "text", value: "" };
+  }
+
+  return { type: "choice", items: null };
+}
+
 export function toAnswerItem(item: Pick<ChoiceAnswerItem, "label" | "description">): ChoiceAnswerItem {
   return {
     label: item.label,

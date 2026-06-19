@@ -19,7 +19,7 @@ test.afterEach(async () => {
   await rm(tempDir, { recursive: true, force: true });
 });
 
-test("creates a cloud session, copies traceable Markdown, and downloads omitted secrets", async ({ page }) => {
+test("creates a cloud session, copies traceable Answer Text, and downloads omitted secrets", async ({ page }) => {
   if (!running) {
     throw new Error("Worker server is not running.");
   }
@@ -53,20 +53,21 @@ test("creates a cloud session, copies traceable Markdown, and downloads omitted 
   });
   await page.goto(created.fillUrl);
   await expect(page.getByRole("heading", { name: "Remote input check" })).toBeVisible();
-  await page.getByLabel("What should the agent do next?").fill("Ship the Markdown Loopmark flow.");
+  await page.getByLabel("What should the agent do next?").fill("Ship the Answer Text Loopmark flow.");
   await page.getByRole("button", { name: "Ready" }).click();
   await page.getByLabel("Optional API key", { exact: true }).fill("secret-from-cloud-e2e");
-  await page.getByLabel("Note for Optional API key").fill("Use only in the smoke test.");
+  await page.locator("#field-api_key").getByRole("button", { name: "Add note" }).click();
+  await page.getByRole("textbox", { name: "Note for Optional API key" }).fill("Use only in the smoke test.");
   await page.getByRole("button", { name: /Copy answers/i }).click();
   await expect(page.getByText("Answers copied")).toBeVisible();
 
-  const markdown = await page.evaluate(() => navigator.clipboard.readText());
-  expect(markdown).toContain("> Ship the Markdown Loopmark flow.");
-  expect(markdown).toContain("> Ready");
-  expect(markdown).toContain("> Use only in the smoke test.");
-  expect(markdown).toContain(`npx --yes @andie/loopmark secrets ${created.sessionId}`);
-  expect(markdown).not.toContain("```loopmark-answer");
-  expect(markdown).not.toContain("secret-from-cloud-e2e");
+  const answerText = await page.evaluate(() => navigator.clipboard.readText());
+  expect(answerText).toContain("Answer: Ship the Answer Text Loopmark flow.");
+  expect(answerText).toContain("Answer: Ready");
+  expect(answerText).toContain("Note: Use only in the smoke test.");
+  expect(answerText).toContain(`npx --yes @andie/loopmark secrets ${created.sessionId}`);
+  expect(answerText).not.toContain("```loopmark-answer");
+  expect(answerText).not.toContain("secret-from-cloud-e2e");
 
   const secrets = await runLoopmark(["secrets", created.sessionId, "--receipt", created.receiptFile, "--secret-dir", tempDir]);
   expect(secrets.code).toBe(0);
@@ -75,10 +76,18 @@ test("creates a cloud session, copies traceable Markdown, and downloads omitted 
     sessionId: string;
     secretFile: string;
     format: string;
+    preview: {
+      kind: string;
+      text: string;
+    };
   };
   expect(output.status).toBe("secrets_downloaded");
   expect(output.sessionId).toBe(created.sessionId);
   expect(output.format).toBe("env");
+  expect(output.preview).toEqual({
+    kind: "env_redacted",
+    text: "api_key=<redacted>\n"
+  });
   expect(JSON.stringify(output)).not.toContain("secret-from-cloud-e2e");
   expect(await readFile(output.secretFile, "utf8")).toBe("api_key=secret-from-cloud-e2e\n");
 });

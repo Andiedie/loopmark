@@ -3,7 +3,7 @@ import { isSecretValuePresent, normalizeChoiceItems, normalizeTextAnswer } from 
 import { assertSessionId } from "./cloud-protocol";
 import type { NormalizedField, NormalizedSession } from "./schema";
 
-export function createAnswerMarkdown(input: {
+export function createAnswerText(input: {
   sessionId: string;
   session: NormalizedSession;
   payload: SubmitPayload;
@@ -14,11 +14,11 @@ export function createAnswerMarkdown(input: {
   const secretRetrievalCommand = hasSecretValues ? secretCommand(input.sessionId) : undefined;
 
   return [
-    `# ${inlineProse(input.session.title)} Answers`,
+    `${inlineProse(input.session.title)} Answers`,
     "",
     hasSecretValues
-      ? "Paste this Markdown back to the agent. Secret values are omitted below and require the listed Loopmark command."
-      : "Paste this Markdown back to the agent.",
+      ? "Paste this answer text back to the agent. Secret values are omitted below and require the listed Loopmark command."
+      : "Paste this answer text back to the agent.",
     "",
     ...fields.flatMap((field) => renderField(field, input.payload.answers[field.id])),
     ...renderSecretRetrieval(secretRetrievalCommand),
@@ -27,26 +27,15 @@ export function createAnswerMarkdown(input: {
 }
 
 function renderField(field: NormalizedField, answer: SubmittedAnswer | undefined): string[] {
-  return [
-    `## ${inlineProse(field.label)}`,
-    "",
-    "Field:",
-    "",
-    ...quoteProse(field.id),
-    "",
-    ...renderAnswer(field, answer),
-    ""
-  ];
+  return [`${inlineProse(field.label)}`, ...renderAnswer(field, answer), `Field: ${field.id}`, ""];
 }
 
 function renderAnswer(field: NormalizedField, answer: SubmittedAnswer | undefined): string[] {
   if (field.type === "text" && field.secret) {
     const note = answer?.type === "secret" ? normalizeTextAnswer(answer.note) : null;
     const answerLines =
-      answer?.type === "secret" && isSecretValuePresent(answer.value)
-        ? ["Answer: _Secret omitted from Markdown._"]
-        : ["Answer: _No secret value provided._"];
-    return note ? [...answerLines, "", ...renderTextValue("Note", note)] : answerLines;
+      answer?.type === "secret" && isSecretValuePresent(answer.value) ? ["Answer: [secret omitted]"] : ["Answer: [no secret value provided]"];
+    return note ? [...answerLines, ...renderTextValue("Note", note)] : answerLines;
   }
 
   if (field.type === "text") {
@@ -55,19 +44,19 @@ function renderAnswer(field: NormalizedField, answer: SubmittedAnswer | undefine
   }
 
   if (answer?.type !== "choice") {
-    return ["Answer: _No answer_"];
+    return ["Answer: [no answer]"];
   }
 
   const items = normalizeChoiceItems(answer.items);
   const note = normalizeTextAnswer(answer.note);
   const answerLines =
     items.length === 0
-      ? ["Answer: _No answer_"]
+      ? ["Answer: [no answer]"]
       : field.mode === "single"
-        ? ["Answer:", "", ...renderChoiceItem(items[0])]
-        : ["Answer:", "", ...items.flatMap((item, index) => [`Choice ${index + 1}:`, "", ...renderChoiceItem(item), ""])];
+        ? renderChoiceItem("Answer", "Details", items[0])
+        : ["Answer:", ...items.flatMap((item, index) => renderChoiceItem(`Choice ${index + 1}`, `Details ${index + 1}`, item))];
 
-  return note ? [...answerLines, "", ...renderTextValue("Note", note)] : answerLines;
+  return note ? [...answerLines, ...renderTextValue("Note", note)] : answerLines;
 }
 
 function renderSecretRetrieval(command: string | undefined): string[] {
@@ -75,16 +64,7 @@ function renderSecretRetrieval(command: string | undefined): string[] {
     return [];
   }
 
-  return [
-    "## Secrets",
-    "",
-    "Secret answers were omitted from this Markdown. Run this command on the agent machine to download them:",
-    "",
-    "```sh",
-    command,
-    "```",
-    ""
-  ];
+  return ["Secrets", "Secret values were omitted. Run this on the agent machine:", command, ""];
 }
 
 function secretCommand(sessionId: string): string {
@@ -93,23 +73,28 @@ function secretCommand(sessionId: string): string {
 
 function renderTextValue(label: string, value: string | null): string[] {
   if (!value) {
-    return [`${label}: _No answer_`];
+    return [`${label}: [no answer]`];
   }
 
-  return [`${label}:`, "", ...quoteProse(value)];
+  return renderLabeledText(label, value);
 }
 
-function quoteProse(value: string): string[] {
-  return value.split(/\r?\n/).map((line) => `> ${line}`);
-}
-
-function renderChoiceItem(item: { label: string; description?: string }): string[] {
-  const lines = ["Label:", "", ...quoteProse(item.label)];
+function renderChoiceItem(answerLabel: string, detailLabel: string, item: { label: string; description?: string }): string[] {
+  const lines = renderLabeledText(answerLabel, item.label);
   if (!item.description) {
     return lines;
   }
 
-  return [...lines, "", "Description:", "", ...quoteProse(item.description)];
+  return [...lines, ...renderLabeledText(detailLabel, item.description)];
+}
+
+function renderLabeledText(label: string, value: string): string[] {
+  const lines = value.split(/\r?\n/);
+  if (lines.length === 1) {
+    return [`${label}: ${lines[0]}`];
+  }
+
+  return [`${label}:`, ...lines.map((line) => `  ${line}`)];
 }
 
 function flattenFields(session: NormalizedSession): NormalizedField[] {

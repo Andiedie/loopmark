@@ -33,8 +33,8 @@ const workflowSteps = [
     body: "The user reviews a document-like form, edits choices or notes, and keeps sensitive values out of the conversation."
   },
   {
-    title: "Resume with Markdown",
-    body: "The user pastes traceable Markdown back to the agent. If secrets were omitted, the agent fetches them into a local .env file."
+    title: "Resume with Answer Text",
+    body: "The user pastes traceable answer text back to the agent. If secrets were omitted, the agent fetches them into a local .env file."
   }
 ];
 
@@ -50,8 +50,8 @@ const fitItems = [
 const trustItems = [
   "The public link carries the session code in the URL hash.",
   "The Worker and R2 store encrypted session envelopes and encrypted secret bundles only.",
-  "Non-secret answers and notes stay visible in the pasted Markdown conversation.",
-  "Secret values are omitted from Markdown and retrieved into a local .env file only when needed."
+  "Non-secret answers and notes stay visible in the pasted Answer Text conversation.",
+  "Secret values are omitted from Answer Text and retrieved into a local .env file only when needed."
 ];
 
 type HandoffStepId = "prepare" | "form" | "answer" | "resume";
@@ -96,11 +96,11 @@ const handoffSteps: HandoffStep[] = [
   {
     id: "resume",
     label: "Resume",
-    title: "The agent resumes from pasted Markdown.",
+    title: "The agent resumes from pasted Answer Text.",
     body: "Non-secret answers stay human-readable in the conversation. Secret values are omitted and fetched locally only when needed.",
-    agentState: "Reads Markdown",
+    agentState: "Reads Answer Text",
     userState: "Pastes answer",
-    artifactLabel: "answer Markdown"
+    artifactLabel: "answer.txt"
   }
 ];
 
@@ -142,33 +142,22 @@ const secretQuestionJsonExample = `{
   ]
 }`;
 
-const answerMarkdownExample = `# Need product direction Answers
+const answerTextExample = `Need product direction Answers
 
-## Which direction should I take?
+Which direction should I take?
+Answer: Smallest viable change
+Note: Ship the smallest reliable path today.
+Field: scope`;
 
-Answer:
+const secretAnswerTextExample = `${answerTextExample}
 
-Label:
+Optional API token
+Answer: [secret omitted]
+Field: api_token
 
-> Smallest viable change
-
-Note:
-
-> Ship the smallest reliable path today.`;
-
-const secretMarkdownExample = `${answerMarkdownExample}
-
-## Optional API token
-
-Answer: _Secret omitted from Markdown._
-
-## Secrets
-
-Run this command on the agent machine:
-
-\`\`\`sh
-npx --yes @andie/loopmark secrets s_xxx
-\`\`\``;
+Secrets
+Secret values were omitted. Run this on the agent machine:
+npx --yes @andie/loopmark secrets s_xxx`;
 
 const installCommand = "npx skills add andiedie/loopmark";
 type CopyStatus = "idle" | "copied" | "failed";
@@ -258,8 +247,8 @@ export function HomePage() {
           <h1 className="mt-5 font-serif text-6xl leading-none md:text-7xl">Loopmark</h1>
           <p className="mt-5 max-w-2xl text-xl leading-8 text-paper-ink">Structured human input for AI agents.</p>
           <p className="mt-4 max-w-3xl text-base leading-7 text-paper-muted">
-            Give agents a clean way to pause for the decisions that still belong to a person, then copy traceable
-            Markdown back when you are done.
+            Give agents a clean way to pause for the decisions that still belong to a person, then copy traceable answer
+            text back when you are done.
           </p>
           <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row">
             <a
@@ -309,7 +298,7 @@ export function HomePage() {
               <h2 className="mt-3 font-serif text-4xl leading-tight">Watch one handoff from Agent to User.</h2>
               <p className="mt-4 max-w-xl text-sm leading-6 text-paper-muted">
                 A Loopmark exchange is just four visible moments: prepare a question, open a form, answer, and resume
-                from Markdown.
+                from Answer Text.
               </p>
             </div>
 
@@ -375,7 +364,7 @@ export function HomePage() {
                   activeHandoffStep.id === "prepare"
                     ? "The agent asks only after it has done its own homework."
                     : activeHandoffStep.id === "resume"
-                      ? "The agent reads the pasted Markdown and continues the task."
+                      ? "The agent reads the pasted Answer Text and continues the task."
                       : "The agent can stop working while the user answers."
                 }
               />
@@ -397,7 +386,7 @@ export function HomePage() {
                   activeHandoffStep.id === "form"
                     ? "The user opens a focused fill page instead of answering in chat."
                     : activeHandoffStep.id === "answer"
-                      ? "The user edits the answer and copies the final Markdown."
+                      ? "The user edits the answer and copies the final Answer Text."
                       : "The user sees only the link or the final answer moment."
                 }
               />
@@ -437,7 +426,7 @@ export function HomePage() {
 
           <div id="privacy" className="min-w-0">
             <ShieldCheck aria-hidden className="mb-5 size-6 text-paper-accent" />
-            <h2 className="font-serif text-3xl leading-tight">Designed around traceable Markdown and encrypted secrets.</h2>
+            <h2 className="font-serif text-3xl leading-tight">Designed around traceable Answer Text and encrypted secrets.</h2>
             <ul className="mt-6 grid gap-4">
               {trustItems.map((item) => (
                 <li key={item} className="flex items-start gap-3 text-sm leading-6 text-paper-muted">
@@ -457,7 +446,7 @@ export function HomePage() {
             <h2 className="font-serif text-4xl leading-tight">Install the agent skill.</h2>
             <p className="mt-4 max-w-xl text-sm leading-6 text-paper-muted">
               Most users only need the skill. It teaches the agent when to ask, how to create a Loopmark session, and
-              when to read pasted Markdown or download omitted secrets.
+              when to read pasted Answer Text or download omitted secrets.
             </p>
           </div>
           <div className="min-w-0">
@@ -535,7 +524,7 @@ function SecretLane() {
         Secret handling
       </div>
       <div className="mt-4 grid gap-2 sm:grid-cols-3">
-        <SecretLaneItem icon={<Lock aria-hidden className="size-4" />} label="Secret field" body="Typed by the user, omitted from Markdown." />
+        <SecretLaneItem icon={<Lock aria-hidden className="size-4" />} label="Secret field" body="Typed by the user, omitted from Answer Text." />
         <SecretLaneItem icon={<Database aria-hidden className="size-4" />} label="Encrypted bundle" body="Stored as ciphertext for later retrieval." />
         <SecretLaneItem icon={<FileKey2 aria-hidden className="size-4" />} label=".env file" body="Downloaded locally with the agent receipt." />
       </div>
@@ -566,7 +555,7 @@ function HandoffArtifactPreview({ stepId, showSecretPath }: { stepId: HandoffSte
     return <MockLoopmarkForm answered showSecretPath={showSecretPath} />;
   }
 
-  return <CodeArtifact label="answer.md" code={showSecretPath ? secretMarkdownExample : answerMarkdownExample} />;
+  return <CodeArtifact label="answer.txt" code={showSecretPath ? secretAnswerTextExample : answerTextExample} />;
 }
 
 function CodeArtifact({ label, code }: { label: string; code: string }) {
@@ -624,7 +613,7 @@ function MockLoopmarkForm({ answered, showSecretPath }: { answered: boolean; sho
           <div className="mt-3 border border-paper-line bg-white px-3 py-2 font-mono text-sm text-paper-muted">
             {answered ? "••••••••••••" : "Password field"}
           </div>
-          <p className="mt-2 text-xs leading-5 text-paper-muted">This value is omitted from Markdown.</p>
+          <p className="mt-2 text-xs leading-5 text-paper-muted">This value is omitted from Answer Text.</p>
         </div>
       ) : null}
 

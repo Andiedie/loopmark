@@ -26,9 +26,9 @@ When the agent needs human input, it creates a compact JSON question session and
 npx --yes @andie/loopmark < questions.json
 ```
 
-The CLI encrypts the session, posts it to the Loopmark Worker, writes a local receipt file, prints a public fill URL, and exits. The human opens the URL, answers in the browser, clicks Copy answers, and pastes the copied Markdown back to the agent.
+The CLI encrypts the session, posts it to the Loopmark Worker, writes a local receipt file, prints a public fill URL, and exits. The human opens the URL, answers in the browser, clicks Copy answers, and pastes the copied Answer Text back to the agent.
 
-Non-secret answers and notes live directly in the pasted Markdown so the conversation stays traceable. If the Markdown says secrets were omitted, the agent downloads only the encrypted secret bundle:
+Non-secret answers and notes live directly in the pasted Answer Text so the conversation stays traceable. If the Answer Text says secrets were omitted, the agent downloads only the encrypted secret bundle:
 
 ```bash
 npx --yes @andie/loopmark secrets s_xxx
@@ -61,7 +61,7 @@ Loopmark uses end-to-end encryption for question sessions and secrets:
 
 - The public fill link contains only a `sessionCode` in the URL hash.
 - The Worker and R2 store encrypted question-session envelopes and encrypted secret bundles only.
-- Browser answers are copied as Markdown. Non-secret answers and notes are visible in Markdown; secret values are omitted.
+- Browser answers are copied as Answer Text. Non-secret answers and notes are visible in Answer Text; secret values are omitted.
 - The local receipt file contains the secret decryption key and should not be shared.
 - Secret answers are encrypted in the browser, uploaded as ciphertext, downloaded with `npx --yes @andie/loopmark secrets`, and written to a local `.env` file.
 
@@ -81,4 +81,4 @@ For bucket lifecycle, API token scope, custom domain setup, dry-run checks, and 
 
 ## For Agent Authors
 
-The operational protocol lives in `skills/loopmark/SKILL.md` and `skills/loopmark/references/protocol.md`. Humans normally do not need to write Loopmark JSON by hand; the installed skill teaches the agent to generate the session, run the CLI, wait for pasted Markdown, and download omitted secrets only when needed.
+The operational protocol lives in `skills/loopmark/SKILL.md` and `skills/loopmark/references/protocol.md`. Humans normally do not need to write Loopmark JSON by hand; the installed skill teaches the agent to generate the session, run the CLI, wait for pasted Answer Text, and download omitted secrets only when needed.

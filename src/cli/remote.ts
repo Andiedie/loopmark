@@ -41,6 +41,10 @@ export type RemoteSecretsResult = {
   sessionId: string;
   secretFile: string;
   format: "env";
+  preview: {
+    kind: "env_redacted";
+    text: string;
+  };
 };
 
 export async function createRemoteSession(
@@ -90,13 +94,14 @@ export async function downloadRemoteSecrets(
   const bundle = await decryptSecretBundleEnvelope({ receipt, envelope });
   const secretDir = resolve(options.secretDir ?? join(tmpdir(), `loopmark-${normalizedSessionId}`));
   const secretFile = join(secretDir, "secrets.env");
-  await writeSecretEnvFile(receipt, bundle, secretFile);
+  const preview = await writeSecretEnvFile(receipt, bundle, secretFile);
 
   return {
     status: "secrets_downloaded",
     sessionId: normalizedSessionId,
     secretFile,
-    format: "env"
+    format: "env",
+    preview
   };
 }
 
@@ -129,9 +134,10 @@ async function writeSecretEnvFile(
   receipt: RemoteSessionReceipt,
   bundle: SecretBundle,
   secretFile: string
-): Promise<void> {
+): Promise<RemoteSecretsResult["preview"]> {
   const directory = resolve(secretFile, "..");
   const lines: string[] = [];
+  const previewLines: string[] = [];
   const envKeyByFieldId = assertUniqueSecretEnvKeys(receipt.session);
 
   for (const field of flattenFields(receipt.session)) {
@@ -149,6 +155,7 @@ async function writeSecretEnvFile(
       continue;
     }
     lines.push(`${key}=${formatEnvValue(secret.value)}`);
+    previewLines.push(`${key}=<redacted>`);
   }
 
   if (lines.length === 0) {
@@ -160,6 +167,11 @@ async function writeSecretEnvFile(
     encoding: "utf8",
     mode: 0o600
   });
+
+  return {
+    kind: "env_redacted",
+    text: `${previewLines.join("\n")}\n`
+  };
 }
 
 function assertUniqueSecretEnvKeys(session: NormalizedSession): Map<string, string> {

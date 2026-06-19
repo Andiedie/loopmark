@@ -14,7 +14,8 @@
 
 ## Decisions
 
-- `adr/0001-paste-markdown-answer-transport.md`: accepted transport decision for pasted Markdown answers plus encrypted secret bundles.
+- `adr/0001-paste-markdown-answer-transport.md`: superseded transport decision for pasted Markdown answers plus encrypted secret bundles.
+- `adr/0002-answer-text-transport.md`: accepted transport decision for pasted Answer Text plus encrypted secret bundles.
 
 ## Published Skill
 

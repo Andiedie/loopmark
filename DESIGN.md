@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Loopmark is a cloud human-input handoff for AI agents. The browser experience should feel like a refined paper trail: editorial, calm, precise, and trustworthy. It lets a human review questions, edit answers, copy Markdown, and keep secret values out of the conversation.
+Loopmark is a cloud human-input handoff for AI agents. The browser experience should feel like a refined paper trail: editorial, calm, precise, and trustworthy. It lets a human review questions, edit answers, copy Answer Text, and keep secret values out of the conversation.
 
 This file is the current UI design source of truth. It describes constraints and acceptance checks, not historical exploration.
 
@@ -18,7 +18,7 @@ This file is the current UI design source of truth. It describes constraints and
 - Tokens: `tailwind.config.ts`.
 - Shared controls: `src/components/ui/`.
 - Page composition: `src/ui/App.tsx`.
-- Answer Markdown and secret behavior: `src/shared/answer-markdown.ts`, `src/shared/submission.ts`, and `src/shared/cloud-protocol.ts`.
+- Answer Text and secret behavior: `src/shared/answer-text.ts`, `src/shared/submission.ts`, and `src/shared/cloud-protocol.ts`.
 
 ## Product Stance
 
@@ -69,12 +69,12 @@ Mobile: < 768px
 ## Answer Controls
 
 - Text answers use inputs or textareas. Long or free-form answers use multiline controls.
-- Do not expose `Markdown`, `Code`, or `Text` type markers in the UI; free-form answers are simply text.
+- Do not expose legacy format markers in the UI; free-form answers are simply text.
 - Single and multiple choice fields always include a system `Other` option. Agents do not provide it.
 - Selecting `Other` reveals a short answer input and submits the typed value as the selected answer label. Blank `Other` counts as no selected answer.
 - Ranking fields do not include `Other`.
 - Choice descriptions should be visible in the option row when present, not hidden only in tooltips.
-- Choice fields include a compact note textarea so humans can explain selection, reordering, or skipped answers.
+- Choice fields include a compact collapsed note control so humans can explain selection, reordering, or skipped answers only when needed.
 - Text fields do not need a separate note because the answer itself can carry explanation.
 
 ## Component Rules
@@ -83,9 +83,10 @@ Mobile: < 768px
 - Icon-only buttons must have accessible labels.
 - Disabled controls stay visible but quiet and must not create layout shift.
 - Inputs are compact, about `36px` tall, and must not clip placeholder text.
-- Textareas handle ordinary text answers, choice notes, secret notes, and multiline answers.
+- Textareas handle ordinary text answers, expanded choice notes, expanded secret notes, and multiline answers.
 - Choice options use a readable ruled list. Avoid tiny chips, desktop-only grids, and selected-answer editors.
 - Selected options use both accent color and a check icon; color alone is not enough.
+- Skip controls mark a question as unanswered by clearing text, selected choices, rankings, secret values, and notes.
 - Reset controls restore the initial answer for a field and require confirmation because they discard human edits.
 - Reserve header space for reset controls and default hints so appearing or disappearing icons do not shift content.
 - Notes stay visually secondary and must not compete with the answer control.
@@ -93,7 +94,7 @@ Mobile: < 768px
 ## Ranking
 
 - Ranking items must be sortable by drag, keyboard sorting through the drag handle, and up/down buttons.
-- Ranking items can be removed directly. Reset restores the initial ranking.
+- Ranking items can be removed directly. Skip clears the ranking; reset restores the initial ranking.
 - Rank numbers are typographic gutter numbers, not badges, pills, boxes, or inputs.
 - The actively dragged row must sit above neighboring rows visually.
 - Touch drag handles use `touch-action: none`; the rest of the row should still allow normal page scroll.
@@ -102,8 +103,9 @@ Mobile: < 768px
 ## Field Notes And Reset
 
 - Default hints are icon-level while the current answer still matches the initial default.
-- Secret fields use a lock icon. The explanation is that the secret value is omitted from Markdown and later written to a local file by the agent.
+- Secret fields use a lock icon. The explanation is that the secret value is omitted from the copied Answer Text and later written to a local file by the agent.
 - Do not repeat long "Agent suggests..." or secret-handling copy beside every field.
+- Each question has a compact Skip control so humans can prevent agent defaults from being copied as answers.
 - Changed fields show a reset icon. Reset requires confirmation and must not create layout shift when appearing.
 
 ## Validation And Copy
@@ -113,16 +115,16 @@ Mobile: < 768px
 - If the first invalid field is inside a collapsed group, expand the group before scrolling.
 - Do not add a separate first-issue navigation button.
 - Errors appear directly under the relevant answer and use both text/icon and color.
-- Success tells the user to paste the copied Markdown back to the agent.
-- If clipboard access fails after answers are prepared, show the generated Markdown in a readonly textarea for manual copy.
+- Success tells the user to paste the copied Answer Text back to the agent.
+- If clipboard access fails after answers are prepared, show the generated Answer Text in a readonly textarea for manual copy.
 
 ## Secrets
 
 - Secret values are encrypted before copy.
-- Secret plaintext is never shown in answer Markdown.
-- Notes on secret fields remain visible in Markdown like other notes.
-- The copied Markdown includes the `loopmark secrets` command only when a secret value was entered.
-- The UI should make omitted-from-Markdown behavior and local `.env` retrieval visible without exposing secret content.
+- Secret plaintext is never shown in Answer Text.
+- Notes on secret fields remain visible in Answer Text like other notes.
+- The copied Answer Text includes the `loopmark secrets` command only when a secret value was entered.
+- The UI should make omitted-from-Answer-Text behavior and local `.env` retrieval visible without exposing secret content.
 
 ## States
 

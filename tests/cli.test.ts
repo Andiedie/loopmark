@@ -45,7 +45,11 @@ function createDependencies(): CliDependencies {
       status: "secrets_downloaded" as const,
       sessionId: "s_test",
       secretFile: "/tmp/loopmark-s_test/secrets.env",
-      format: "env" as const
+      format: "env" as const,
+      preview: {
+        kind: "env_redacted" as const,
+        text: "api_key=<redacted>\n"
+      }
     }))
   };
 }
@@ -188,7 +192,11 @@ describe("CLI runner", () => {
       status: "secrets_downloaded",
       sessionId: "s_abcdefghijklmnopqrstuvwx",
       secretFile: "/tmp/loopmark-secrets/secrets.env",
-      format: "env"
+      format: "env",
+      preview: {
+        kind: "env_redacted",
+        text: "api_key=<redacted>\n"
+      }
     };
     const { runtime, stdout, stderr } = createRuntime("ignored stdin", {
       argv: [

@@ -7,7 +7,7 @@ description: "Use when an AI agent needs structured human input through the Loop
 
 ## Overview
 
-Loopmark is a cloud-backed human-input handoff for agents. Use it to create an encrypted public fill page, give the URL to the human, then read the pasted Markdown answer directly. If secrets were omitted, download the encrypted secret bundle with the local receipt file.
+Loopmark is a cloud-backed human-input handoff for agents. Use it to create an encrypted public fill page, give the URL to the human, then read the pasted Answer Text directly. If secrets were omitted, download the encrypted secret bundle with the local receipt file.
 
 ## Operating Principles
 
@@ -18,7 +18,7 @@ Loopmark is a cloud-backed human-input handoff for agents. Use it to create an e
 - Treat every field as optional.
 - Do not include an `Other` option in single-choice or multiple-choice fields. Loopmark adds `Other` automatically, and it is always present on the fill page for those modes.
 - Treat stdout as the only machine-readable stream. Treat stderr as human-readable operational output.
-- Do not poll. Create once, wait for the human to paste the copied Markdown answer, then run `secrets` only if the Markdown says secrets were omitted.
+- Do not poll. Create once, wait for the human to paste the copied Answer Text, then run `secrets` only if the Answer Text says secrets were omitted.
 
 ## Workflow
 
@@ -40,15 +40,15 @@ npx --yes @andie/loopmark < /path/to/questions.json
 
 4. Parse stdout from the create command. It has `status`, `fillUrl`, `receiptFile`, and `sessionId`.
 5. Send only `fillUrl` to the human. Keep `receiptFile` local; it contains the answer decryption key.
-6. Ask the human to open the URL, answer in the browser, click Copy answers, and paste the copied Markdown back into chat. Then stop tool activity for this wait. Do not rerun create and do not poll.
-7. When the human pastes the Markdown answer, read the non-secret answers directly from the Markdown. The Markdown is the durable conversation record; do not replace it with a short retrieval token.
-8. If the Markdown contains a secrets section, run the listed command or use the same `sessionId` from create:
+6. Ask the human to open the URL, answer in the browser, click Copy answers, and paste the copied Answer Text back into chat. Then stop tool activity for this wait. Do not rerun create and do not poll.
+7. When the human pastes the Answer Text, read the non-secret answers directly from it. The Answer Text is the durable conversation record; do not replace it with a short retrieval token.
+8. If the Answer Text contains a `Secrets` section, run the listed command or use the same `sessionId` from create:
 
 ```bash
 npx --yes @andie/loopmark secrets s_xxx
 ```
 
-9. Parse stdout from `secrets`. If it returns `status: "secrets_downloaded"`, read the reported `.env` file only when the task truly requires the secret values.
+9. Parse stdout from `secrets`. If it returns `status: "secrets_downloaded"`, use `preview.text` to understand the redacted `.env` shape and read the reported `.env` file only when the task truly requires the secret values.
 10. Avoid exposing secret file contents unless the task truly requires reading them.
 
 For a self-hosted Loopmark service, pass `--base-url https://your-loopmark.example` on the create command or set `LOOPMARK_BASE_URL`.

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by ADR 0002.
 
 ## Context
 
@@ -58,7 +58,7 @@ This would make Loopmark a static page and CLI-only protocol. It would also forc
 
 ## Source Of Truth
 
-- Answer Markdown: `src/shared/answer-markdown.ts`.
+- Superseding Answer Text renderer: `src/shared/answer-text.ts`.
 - Secret bundle protocol: `src/shared/cloud-protocol.ts`.
 - CLI create and secret download: `src/cli/remote.ts`.
 - Worker object layout: `src/server/worker.ts`.

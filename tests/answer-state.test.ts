@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   getInitialAnswer,
+  getEmptyAnswer,
   isAnswerPresent,
   normalizeChoiceItems,
   normalizeTextAnswer,
@@ -42,6 +43,22 @@ describe("answer state helpers", () => {
     expect(getInitialAnswer(secret)).toEqual({ type: "secret", value: null });
     expect(getInitialAnswer(choice)).toEqual({ type: "choice", items: [{ label: "A" }] });
     expect(toAnswerItem({ label: "A", description: "B" })).toEqual({ label: "A", description: "B" });
+  });
+
+  it("creates empty answers for skipped fields", () => {
+    const session = normalizeSession({
+      title: "Need input",
+      fields: [
+        { id: "text", label: "Text", type: "text", default: "hello" },
+        { id: "secret", label: "Secret", type: "text", secret: true },
+        { id: "choice", label: "Choice", type: "choice", options: ["A"], default: "A" }
+      ]
+    });
+    const [text, secret, choice] = session.groups[0].fields;
+
+    expect(getEmptyAnswer(text)).toEqual({ type: "text", value: "" });
+    expect(getEmptyAnswer(secret)).toEqual({ type: "secret", value: null });
+    expect(getEmptyAnswer(choice)).toEqual({ type: "choice", items: null });
   });
 
   it("detects whether optional fields contain user-provided content", () => {

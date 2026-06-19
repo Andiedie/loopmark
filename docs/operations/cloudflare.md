@@ -27,7 +27,7 @@ This runbook covers self-hosting Loopmark on Cloudflare Workers with private R2 
 - R2 stores encrypted objects only:
   - `sessions/{sessionId}/session.json`
   - `sessions/{sessionId}/secrets.json`
-- Non-secret answers are not stored in R2. They are copied as Markdown and pasted back to the agent.
+- Non-secret answers are not stored in R2. They are copied as Answer Text and pasted back to the agent.
 - Keep the R2 bucket private. Clients should call the Worker API, never R2 directly.
 - The GitHub environment URL may use `LOOPMARK_BASE_URL`, but that variable does not configure Cloudflare routing.
 
@@ -67,7 +67,7 @@ or set `LOOPMARK_BASE_URL` in the agent runtime.
 - Cloudflare dry run: `pnpm check:cloudflare`.
 - CI deploy workflow validates with `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm test:e2e` before deploy.
 - After deploy, check `/api/health` returns JSON with `service: "loopmark"` and `protocol: 1`.
-- Create a short session against the deployed base URL, open the fill URL, copy Markdown, and verify any secret value is omitted from Markdown and downloadable only with `loopmark secrets`.
+- Create a short session against the deployed base URL, open the fill URL, copy Answer Text, and verify any secret value is omitted from Answer Text and downloadable only with `loopmark secrets`.
 
 ## Update When
 

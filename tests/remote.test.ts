@@ -93,7 +93,11 @@ describe("remote CLI client", () => {
       status: "secrets_downloaded",
       sessionId: created.sessionId,
       secretFile: join(tempDir, "secrets.env"),
-      format: "env"
+      format: "env",
+      preview: {
+        kind: "env_redacted",
+        text: "api_key=<redacted>\n"
+      }
     });
     expect(JSON.stringify(downloaded)).not.toContain("secret-from-remote-test");
     expect(await readFile(downloaded.secretFile, "utf8")).toBe("api_key=secret-from-remote-test\n");
@@ -158,6 +162,13 @@ describe("remote CLI client", () => {
     expect(await readFile(downloaded.secretFile, "utf8")).toBe(
       'api_key="needs quotes"\n_123token=plain-token\nSECRET=fallback\n'
     );
+    expect(downloaded.preview).toEqual({
+      kind: "env_redacted",
+      text: "api_key=<redacted>\n_123token=<redacted>\nSECRET=<redacted>\n"
+    });
+    expect(JSON.stringify(downloaded.preview)).not.toContain("needs quotes");
+    expect(JSON.stringify(downloaded.preview)).not.toContain("plain-token");
+    expect(JSON.stringify(downloaded.preview)).not.toContain("fallback");
   });
 
   it("rejects decrypted secret bundles with malformed secret values", async () => {
