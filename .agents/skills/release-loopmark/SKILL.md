@@ -1,6 +1,6 @@
 ---
 name: release-loopmark
-description: "Release Loopmark to npm and Cloudflare from the main worktree."
+description: "Release Loopmark to npm and Cloudflare."
 disable-model-invocation: true
 ---
 
@@ -17,9 +17,9 @@ Use this skill only when the user explicitly asks to publish or deploy Loopmark.
 
 ## Steps
 
-1. Inspect the main worktree.
+1. Inspect the repository.
 
-   Run from the main worktree, normally `/Users/andie/code/Andiedie/loopmark`:
+   Run from the repository root:
 
    ```sh
    git status --short --branch
@@ -27,7 +27,7 @@ Use this skill only when the user explicitly asks to publish or deploy Loopmark.
    git remote -v
    ```
 
-   Completion criterion: the worktree is on `main`, the state is clean or every local change is intentional, and the release target commit is known.
+   Completion criterion: the current branch is `main`, the repository is clean or every local change is intentional, and the release target commit is known.
 
 2. Check the package version and tag state.
 
