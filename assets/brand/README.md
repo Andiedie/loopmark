@@ -1,6 +1,14 @@
 # Loopmark Brand Assets
 
-Source note: generated on 2026-06-16 from the final `LM Solid Mark` direction.
+## Purpose
+
+Preserve provenance for checked-in Loopmark logo assets and identify which files are source images versus runtime derivatives.
+
+## Source Note
+
+Generated on 2026-06-16 from the final `LM Solid Mark` direction.
+
+## Assets
 
 - `loopmark-logo-source.png`: original generated final logo image, preserved for provenance and future reprocessing.
 - `loopmark-logo.png`: normalized 1024x1024 transparent PNG master.
@@ -13,5 +21,12 @@ Runtime favicon and app icon derivatives live in `public/`. They use a rounded w
 - `favicon-32x32.png`
 - `favicon-48x48.png`
 - `apple-touch-icon.png`
-- `icon-192.png` also used by the in-app header for a sharper 32px logo
+- `icon-192.png`, also used by the in-app header for a sharper 32px logo
 - `icon-512.png`
+
+The web app manifest lives at `public/site.webmanifest` and references the `icon-192.png` and `icon-512.png` derivatives.
+
+## Update When
+
+- The logo direction changes.
+- Runtime icon derivatives in `public/` are regenerated from a new source image.

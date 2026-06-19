@@ -1,329 +1,54 @@
 # Loopmark Design
 
-Loopmark is a cloud human-input handoff for AI Agents. It reads a compact JSON question session, opens a public encrypted fill page, and lets the human copy dense Markdown feedback back to the calling agent. The interface is not a form builder, dashboard, survey SaaS, or approval system. It is a quiet, well-set document where a human can review, answer, rank, annotate, and copy with confidence.
+## Purpose
 
-## 1. Design Goal
+Loopmark is a cloud human-input handoff for AI agents. The browser experience should feel like a refined paper trail: editorial, calm, precise, and trustworthy. It lets a human review questions, edit answers, copy Markdown, and keep secret values out of the conversation.
 
-The product should feel like a refined paper trail: editorial, calm, precise, and trustworthy. It must support a three-question ungrouped session as naturally as a longer grouped questionnaire.
+This file is the current UI design source of truth. It describes constraints and acceptance checks, not historical exploration.
 
-Design priorities:
+## Read When
 
-- Make the question document immediately understandable.
-- Keep answer editing fast and direct.
-- Preserve enough context that the user knows what the agent is asking and why.
-- Avoid dashboard aesthetics, KPI blocks, heavy cards, bright gradients, and decorative UI.
-- Treat defaults as agent suggestions that the user can edit, not as final truth.
-- Protect sensitive answers by making encrypted transport and local `.env` retrieval visible without exposing secret content.
+- Changing the fill page, answer controls, validation, copy flow, responsive layout, or design tokens.
+- Adding a new field type, state, visual pattern, or icon.
+- Updating tests or screenshots for the browser experience.
 
-## 2. Principles
+## Source Of Truth
 
-### 2.1 Document First
+- Product/domain invariants: `CONTEXT.md`.
+- Tokens: `tailwind.config.ts`.
+- Shared controls: `src/components/ui/`.
+- Page composition: `src/ui/App.tsx`.
+- Answer Markdown and secret behavior: `src/shared/answer-markdown.ts`, `src/shared/submission.ts`, and `src/shared/cloud-protocol.ts`.
 
-The primary surface is a document with a title, context, chapters, numbered questions, answer controls, choice notes, marginal notes, and a final copy action. Use typography, spacing, and fine rules before panels or cards.
+## Product Stance
 
-### 2.2 Content Before Chrome
+- Loopmark is not a dashboard, survey SaaS, form builder, or approval system.
+- The primary surface is a readable question document.
+- Human edits are first-class. Agent defaults are suggestions that can be changed or cleared.
+- Simple ungrouped sessions and complex grouped sessions follow the same rules; grouped sessions add structure without becoming admin chrome.
+- Output is for the agent, but the human must understand what will be pasted back.
 
-Questions and answers get the widest and clearest reading path. Controls should support the document, not compete with it. Avoid side panels or multi-column layouts that make labels or answer controls feel cramped.
+## Visual Invariants
 
-### 2.3 Human Edits Are First-Class
-
-Agent-provided defaults are suggestions. Text defaults can be edited directly, choice defaults can be changed or cleared, and ranking defaults can be reordered or removed.
-
-### 2.4 State Must Be Explicit
-
-Answered progress, selected choices, validation errors, collapsed groups, secret handling, loading, and copied states must be visible without making the page feel noisy.
-
-### 2.5 Compact Output, Rich Context
-
-The UI can show guidance and context, but final output is for an agent. The page should help the human produce answers that are concise, readable, and self-explanatory.
-
-### 2.6 Same Rules For Simple And Complex Sessions
-
-Ungrouped sessions should become an elegant single-column document. Grouped sessions add a light outline and chapter structure. They should not become an admin dashboard.
-
-## 3. Information Architecture
-
-```text
-App Shell
-├── Top Bar: product name, session title, answered progress
-├── Outline: grouped-session table of contents only
-├── Document Workspace: title, description, groups, questions, answer controls
-└── Action Bar: copy action and validation copy
-```
-
-Rules:
-
-- The top bar is global context. Keep it short and stable.
-- The outline appears only for grouped sessions. It is a table of contents, not navigation chrome.
-- The document workspace owns all question and answer content.
-- Marginal notes are secondary and reserved for information that changes the user's decision. Agent default hints should be icon-level by default, not repeated paragraphs.
-- Modals are not used in v1. The flow should complete inline.
-- Drawers are not used in v1. Mobile should remain a readable document, not a hidden-panel workflow.
-
-Core path:
-
-```text
-Agent creates encrypted session -> human reviews defaults -> human edits answers -> validation points to first issue -> copy Markdown -> human pastes Markdown back to agent
-```
-
-## 4. Layout
-
-### Desktop
-
-- Minimum comfortable width: 1024px.
-- Grouped layout: `260px` outline plus flexible document workspace.
-- Ungrouped layout: centered document, no outline.
-- Document max readable width: about `960px` to `1040px`.
-- Question row: narrow number column, wide answer column, optional marginal note column only for grouped sessions where the note is genuinely useful.
-- Question anatomy: number -> question line -> optional status icons -> description -> answer control -> validation/notes.
-- The answer control appears below the question line, not in a cramped parallel column.
-- Ungrouped sessions use a broad single-column document. They must not inherit the grouped outline, right note rail, or complex side-by-side chrome.
-- The top bar, document body, and copy action use the same page frame. Avoid full-width header/footer interiors when the document itself is narrower.
-- The final action area belongs to the document flow and aligns to the document width. It is not a full-width dashboard footer.
-- Section gap: 40px to 56px.
-- Question vertical padding: 20px to 28px.
-
-### Tablet
-
-- Hide the outline.
-- Keep group headers and progress visible inside the document.
-- Marginal notes move below answer controls and should disappear entirely when they are not needed.
-- Preserve the question number, but do not let it force narrow content.
-
-### Mobile
-
-- Single-column document.
-- Top bar stacks product, session title, and progress.
-- Choice options wrap naturally.
-- Ranking items stay compact on mobile: drag handle, rank number, item text, and up/down actions share one ruled row.
-- Ranking rank numbers must never stretch to full row width on mobile.
-- Ranking drag handles are real touch targets. Gestures that start on the handle must reorder the list, not scroll the page.
-- Description editors must show at least two lines when content may be long.
-- No horizontal scrolling, clipped labels, or truncated placeholders.
-
-## 5. Visual Style
-
-Keywords: paper, editorial, calm, precise, restrained, encrypted, trustworthy.
-
-Rules:
-
-- Background is warm paper white, not dashboard gray.
-- Use fine borders and typographic hierarchy instead of cards and shadows.
+- Use a warm paper background, fine borders, and typographic hierarchy.
 - Use deep green only for progress, selected states, primary action, and numbering accents.
-- Avoid large rounded cards, nested cards, glassmorphism, colored metric blocks, saturated gradients, and decorative illustrations.
-- Icons are small functional marks only: remove, reorder, lock, collapse, error, loading.
-- Shadows are avoided in the main document. If needed for overlays later, use only subtle elevation.
+- Avoid dashboard cards, KPI blocks, bento grids, heavy shadows, large rounded containers, glassmorphism, saturated gradients, and decorative illustrations.
+- Product name and document headings use the serif token. Controls, progress, buttons, labels, and helper text use the sans token.
+- Do not hardcode hex colors in React components.
+- Letter spacing is normal except for small uppercase utility labels.
+- No clipped labels, placeholder text, progress values, or horizontal overflow on mobile.
 
-## 6. Design Tokens
+## Layout
 
-Tokens live in `tailwind.config.ts`. Components and pages should use token names instead of ad-hoc hex values.
+- Desktop grouped sessions may show a light outline plus document workspace.
+- Ungrouped sessions use a centered single-column document without outline or note rail.
+- The top bar, document body, and copy action share the same page frame.
+- The copy action belongs to the document flow; avoid a full-width dashboard footer.
+- Question rows use a narrow number and a wide answer path on desktop, then collapse cleanly below desktop widths.
+- Marginal notes are secondary and move below answers before content becomes cramped.
+- Tablet and mobile hide the outline while keeping group headers and progress visible inside the document.
 
-### Color
-
-```text
-paper.50      #fbfaf7  page background
-paper.100     #f4f1eb  subtle marker background
-paper.200     #e7e0d3  progress track / muted fill
-paper.line    #d9d2c6  rules and control borders
-paper.ink     #1f1d1a  primary text
-paper.muted   #706a60  secondary text
-paper.accent  #2e6048  selected state / progress / primary action
-paper.accentDark #214633 hover primary action
-paper.danger  #b43b3b  validation error
-```
-
-### Typography
-
-```text
-Document serif:
-  Iowan Old Style, Palatino Linotype, Palatino, Book Antiqua, Georgia, serif
-
-UI sans:
-  Avenir Next, Avenir, ui-sans-serif, system-ui, sans-serif
-
-Mono:
-  SFMono-Regular, Menlo, Consolas, monospace
-```
-
-Type rules:
-
-- Product name and document headings use serif.
-- Question labels use serif to preserve the editorial rhythm.
-- Controls, progress, buttons, labels, and helper text use sans.
-- Do not scale font size with viewport width.
-- Letter spacing should be normal except for small uppercase utility labels.
-- Long free-form answers should use multiline controls.
-
-### Spacing
-
-Use the Tailwind spacing scale and prefer:
-
-```text
-4 / 8 / 12 / 16 / 20 / 24 / 32 / 40 / 56 / 80
-```
-
-Avoid one-off spacing values unless a layout primitive requires an exact track width.
-
-### Radius
-
-The Paper Trail direction is mostly square and finely ruled.
-
-```text
-Controls: 0px to 2px
-Markers: 2px
-Cards: avoid in primary document
-```
-
-### Shadow
-
-Primary document UI should not use visible shadows. Borders and spacing are the default separators.
-
-## 7. Components
-
-### Button
-
-- Use for explicit actions.
-- One primary button per action area.
-- Primary button is deep green.
-- Secondary buttons are white with a fine border.
-- Icon-only buttons must have accessible labels.
-- Disabled buttons remain visible but quiet.
-- Do not use buttons as badges or status labels.
-
-### Input
-
-- Use for short answer labels or short plain text.
-- Height: compact, about 36px.
-- Must never clip placeholder text in ordinary desktop widths.
-- Must show focus-visible state with accent border/ring.
-
-### Textarea
-
-- Use for ordinary text answers, choice notes, secret multiline answers, and multi-line answers.
-- Description editors should show at least two lines.
-- Do not expose `Markdown`, `Code`, or `Text` type markers in the UI. All free-form answers are simply text.
-
-### Choice Options
-
-- Selected options use accent fill and a check icon.
-- Unselected options are white with a fine border.
-- Options show label and description before selection when description exists.
-- Options use a readable ruled list, not tiny chips or desktop two-column grids. One option occupies one row so label and description have a stable reading path.
-- `single`, `multiple`, and `ranking` use the same label/description answer item shape.
-- `single` and `multiple` use direct selection only. Do not show selected-answer editors.
-- Single and multiple choice fields always include a system `Other` option. Agents do not provide it; the UI adds it.
-- Selecting `Other` reveals a short answer input and submits the typed value as the selected answer label.
-- If `Other` is opened but the typed value is blank, it counts as no selected answer.
-- Ranking fields do not include `Other`.
-- Tooltips are secondary help, not the only place where option descriptions live.
-
-### Reset
-
-- A changed field shows a small reset icon.
-- Reset requires confirmation because it can discard human edits, selected choices, notes, and ranking changes.
-- Reset restores the initial answer for that field.
-- Reserve header space for reset even when the icon is hidden. Reset appearing must not change the title row height or push field content.
-
-### Ranking
-
-- Ranking items are always sortable through drag, keyboard sorting through the drag handle, and up/down buttons.
-- Ranking items can be removed directly from the ranked list. Reset restores the initial ranking.
-- Rank number remains visible as a typographic gutter number. Do not render ranking numbers as bordered boxes, badges, pills, or input-like controls.
-- The actively dragged row must sit above neighboring rows visually.
-- On mobile, reorder actions remain aligned with the row header. Description text may wrap, but controls must not become large stacked blocks.
-- On touch devices, the drag handle must opt out of browser panning with `touch-action: none`; the surrounding row should still scroll normally when the user swipes outside the handle.
-
-### Field Notes
-
-- Agent-provided defaults are shown as a small hint icon while the current answer still matches the default.
-- The hint explains itself on hover/focus and disappears once the user edits the answer away from the default.
-- Reserve header space for default hints when a field has an initial default. The icon disappearing must not create layout shift.
-- Do not repeat full "Agent suggests..." copy on every field.
-- Secret handling is indicated with a lock icon and hover/focus explanation.
-- Do not repeat full secret-handling copy beside every secret field.
-- Single, multiple, and ranking choice fields show a compact note textarea below the answer control so the human can explain a selection, reordering, or skipped answer.
-- Text fields do not get a separate note because the answer input itself can carry explanation.
-- Notes must never compete visually with the answer control.
-
-### Validation Error
-
-- Errors appear directly under the relevant answer.
-- Error copy must explain what is wrong and what to do next.
-- Error state must use both color and text/icon, not color alone.
-
-## 8. Interaction Patterns
-
-### Review And Copy
-
-The user reviews defaults inline, edits as needed, then copies answers once. Avoid extra confirmation unless the action becomes destructive or external.
-
-The copy action is part of the document, aligned to the same page frame as the questions. Do not use a full-width footer with large empty space around a small set of controls.
-
-### Validation Recovery
-
-When validation fails:
-
-- Mark every invalid field.
-- Scroll to the first invalid field.
-- If the field is inside a collapsed group, expand that group first.
-- Do not show a separate first-issue navigation button. The copy attempt itself performs recovery.
-- Keep the action area visually calm: one primary copy action plus concise validation copy.
-
-### Group Collapse
-
-Groups can collapse to reduce complexity. Collapsed headers still show answered progress. Collapsing must not hide validation recovery.
-
-### Secret Fields
-
-Secret fields render as password/text areas as appropriate and include a normal note textarea. A lock icon explains that the secret value is omitted from Markdown, encrypted in the browser, and later downloaded to a local `.env` file with `loopmark secrets`. Notes remain visible in Markdown like other notes.
-
-## 9. State Design
-
-Required states:
-
-- Loading: centered, quiet, with a small spinner and short text.
-- Error: centered for load/fatal errors; inline for validation errors.
-- Success: tells the user to paste the copied Markdown to the agent and does not show answer JSON.
-- Copy fallback: if clipboard access fails after answers are encrypted, show the generated Markdown in a readonly text area so the user can manually copy it.
-- Disabled: reduced opacity, cursor disabled, no hidden layout shift.
-- Validation failed: inline field errors plus automatic first-error reveal.
-- Partial: progress shows answered count.
-- Secret: lock icon plus omitted-from-Markdown copy and local `.env` retrieval.
-- Copied: no more editing in the page.
-
-Not in v1:
-
-- Offline state.
-- Permission denied state.
-- Syncing/unsaved remote state.
-
-If those become real product states later, this document must be updated before implementation.
-
-## 10. Content Style
-
-Tone: professional, direct, sparse.
-
-Rules:
-
-- Prefer short labels over explanatory paragraphs.
-- Button copy uses clear verbs: `Copy answers`, `Add`.
-- Error copy should say what failed and how to recover.
-- Avoid playful or apologetic copy.
-- Do not add visible feature explanations that duplicate obvious controls.
-- Output-facing concepts should keep wording dense enough for an agent to understand without the UI.
-
-## 11. Accessibility
-
-- Every input must have a label or accessible name.
-- Icon-only controls must have `aria-label`.
-- Validation messages must be adjacent to the field and announced through text.
-- Focus-visible must be clear on buttons, links, inputs, and textareas.
-- Selection cannot rely on color alone; selected choices include a check icon.
-- Ranking must have non-drag alternatives.
-- Respect `prefers-reduced-motion`.
-- No text overlap, clipped control labels, or horizontal page overflow at mobile width.
-
-## 12. Responsive Rules
+Responsive breakpoints:
 
 ```text
 Desktop: >= 1024px
@@ -331,71 +56,140 @@ Tablet: 768px-1023px
 Mobile: < 768px
 ```
 
-- Desktop grouped sessions show outline.
-- Tablet and mobile hide outline.
-- Question rows collapse to one column below desktop widths.
-- Marginal notes move below answers before content becomes cramped.
-- Action area becomes document-flow on small screens if sticky behavior would obscure content.
+## Detailed Layout Constraints
 
-## 13. Motion
+- Desktop grouped layout uses a light outline of about `260px` plus a flexible document workspace.
+- Document readable width should stay around `960px` to `1040px` on wide screens.
+- Question anatomy is number, question line, optional status icons, description, answer control, validation, and notes.
+- Answer controls sit below the question line rather than in a cramped parallel column.
+- Section gaps should stay near `40px` to `56px`; question vertical padding should stay near `20px` to `28px`.
+- Modals and drawers are not part of v1. The flow completes inline in the document.
+- Mobile top bar may stack product, session title, and progress, but the page must remain a readable document.
 
-Motion is functional only.
+## Answer Controls
 
-- Hover/focus transitions: 120-180ms.
-- Collapse/expand may animate later, but must not shift focus unexpectedly.
-- Loading spinner is acceptable.
-- Avoid bounce, large movement, decorative animation, or flashing effects.
+- Text answers use inputs or textareas. Long or free-form answers use multiline controls.
+- Do not expose `Markdown`, `Code`, or `Text` type markers in the UI; free-form answers are simply text.
+- Single and multiple choice fields always include a system `Other` option. Agents do not provide it.
+- Selecting `Other` reveals a short answer input and submits the typed value as the selected answer label. Blank `Other` counts as no selected answer.
+- Ranking fields do not include `Other`.
+- Choice descriptions should be visible in the option row when present, not hidden only in tooltips.
+- Choice fields include a compact note textarea so humans can explain selection, reordering, or skipped answers.
+- Text fields do not need a separate note because the answer itself can carry explanation.
 
-## 14. Assets And Icons
+## Component Rules
 
-- No raster assets are required for v1.
-- Use lucide icons only for functional controls and states.
-- Icon stroke, size, and color must stay restrained.
-- Do not mix icon libraries.
-- Do not introduce decorative images unless the product direction changes.
+- Use buttons only for explicit actions. Keep one primary button per action area.
+- Icon-only buttons must have accessible labels.
+- Disabled controls stay visible but quiet and must not create layout shift.
+- Inputs are compact, about `36px` tall, and must not clip placeholder text.
+- Textareas handle ordinary text answers, choice notes, secret notes, and multiline answers.
+- Choice options use a readable ruled list. Avoid tiny chips, desktop-only grids, and selected-answer editors.
+- Selected options use both accent color and a check icon; color alone is not enough.
+- Reset controls restore the initial answer for a field and require confirmation because they discard human edits.
+- Reserve header space for reset controls and default hints so appearing or disappearing icons do not shift content.
+- Notes stay visually secondary and must not compete with the answer control.
 
-## 15. Implementation Constraints
+## Ranking
 
-- Framework: React + Vite + TypeScript.
+- Ranking items must be sortable by drag, keyboard sorting through the drag handle, and up/down buttons.
+- Ranking items can be removed directly. Reset restores the initial ranking.
+- Rank numbers are typographic gutter numbers, not badges, pills, boxes, or inputs.
+- The actively dragged row must sit above neighboring rows visually.
+- Touch drag handles use `touch-action: none`; the rest of the row should still allow normal page scroll.
+- Mobile ranking rows stay compact and must not become large stacked control blocks.
+
+## Field Notes And Reset
+
+- Default hints are icon-level while the current answer still matches the initial default.
+- Secret fields use a lock icon. The explanation is that the secret value is omitted from Markdown and later written to a local file by the agent.
+- Do not repeat long "Agent suggests..." or secret-handling copy beside every field.
+- Changed fields show a reset icon. Reset requires confirmation and must not create layout shift when appearing.
+
+## Validation And Copy
+
+- The user reviews defaults inline, edits answers, then clicks one primary copy action.
+- Validation marks every invalid field and scrolls to the first issue.
+- If the first invalid field is inside a collapsed group, expand the group before scrolling.
+- Do not add a separate first-issue navigation button.
+- Errors appear directly under the relevant answer and use both text/icon and color.
+- Success tells the user to paste the copied Markdown back to the agent.
+- If clipboard access fails after answers are prepared, show the generated Markdown in a readonly textarea for manual copy.
+
+## Secrets
+
+- Secret values are encrypted before copy.
+- Secret plaintext is never shown in answer Markdown.
+- Notes on secret fields remain visible in Markdown like other notes.
+- The copied Markdown includes the `loopmark secrets` command only when a secret value was entered.
+- The UI should make omitted-from-Markdown behavior and local `.env` retrieval visible without exposing secret content.
+
+## States
+
+Required states:
+
+- Loading: quiet centered state with a small spinner.
+- Fatal load error: centered error message.
+- Inline validation error.
+- Partial progress.
+- Disabled controls.
+- Secret field.
+- Copying.
+- Copied.
+- Manual copy fallback.
+
+Not in v1:
+
+- Offline state.
+- Syncing or unsaved remote state.
+- Permission-denied state beyond clipboard fallback.
+
+If those become real product states, update this file before implementation.
+
+## Accessibility And Motion
+
+- Every input has a visible label or accessible name.
+- Validation messages appear adjacent to the field and are communicated through text, not color alone.
+- Focus-visible states must be clear on buttons, links, inputs, textareas, drag handles, and icon controls.
+- Ranking always has non-drag alternatives.
+- Respect `prefers-reduced-motion`.
+- Motion is functional only: hover/focus transitions around `120ms` to `180ms`, no bounce, large decorative movement, or flashing effects.
+
+## Content Style
+
+- Tone is professional, direct, and sparse.
+- Prefer short labels over explanatory paragraphs.
+- Button copy uses clear verbs such as `Copy answers` and `Add`.
+- Error copy explains what failed and how to recover.
+- Do not add visible feature explanations that duplicate obvious controls.
+- Output-facing wording should stay dense enough for an agent to understand without making the UI feel technical.
+
+## Implementation Constraints
+
+- Framework: React, Vite, and TypeScript.
 - Styling: Tailwind with tokens in `tailwind.config.ts`.
-- Shared controls live under `src/components/ui`.
-- Page composition currently lives in `src/ui/App.tsx`; if it grows further, split by feature area rather than creating one-off style islands.
-- Do not hardcode hex colors in React components.
-- Do not introduce dashboard cards, bento grids, gradient backgrounds, or marketing hero sections.
-- Prefer shared primitives for buttons, inputs, and textareas.
+- Shared primitives live under `src/components/ui/`.
+- Page composition currently lives in `src/ui/App.tsx`; if it grows further, split by feature area instead of creating one-off style islands.
+- Use lucide icons only for functional controls and states.
+- Do not mix icon libraries or introduce decorative raster assets unless the product direction changes.
 - Any major UI pattern change must update this file in the same change set.
 
-## 16. Design Acceptance Checklist
+## Acceptance Checklist
 
-Before shipping a UI change:
+- The page reads as a document rather than a dashboard.
+- Questions and answer controls are the clearest elements on the page.
+- Simple ungrouped sessions avoid duplicate section chrome.
+- Grouped sessions are navigable without feeling like an admin sidebar.
+- Defaults are visibly marked and easy to change or clear.
+- Secret fields are explained without revealing content.
+- Validation expands collapsed groups and points to the first issue.
+- Loading, error, success, disabled, validation, copied, and manual-copy states are covered.
+- Desktop and mobile screenshots have no overlap or horizontal overflow.
+- Colors, fonts, spacing, and borders use documented tokens.
+- Accessibility and motion rules are still satisfied.
+- Content remains sparse and action-oriented.
 
-- Does the page still read as a document rather than a dashboard?
-- Are questions and answer controls the clearest elements on the page?
-- Are simple ungrouped sessions clean without duplicate section chrome?
-- Are complex grouped sessions navigable without feeling like an admin sidebar?
-- Are field labels, placeholders, progress values, and buttons free from clipping?
-- Are defaults visibly marked and easy to change or clear?
-- Are secret fields explained without revealing content?
-- Does validation expand collapsed groups and point to the first issue?
-- Are loading, error, success, disabled, and validation states covered?
-- Are desktop and mobile screenshots free of overlap and horizontal overflow?
-- Are colors, fonts, spacing, and borders using the documented tokens?
+## Update When
 
-## 17. Reference Direction
-
-The accepted visual direction is "Paper Trail": a publication-like encrypted questionnaire with a thin top bar, a light outline, chapter headings, numbered questions, broad answer controls, restrained green selection states, and marginal agent notes.
-
-Do not commit local absolute paths to generated concept images. The repository source of truth is this document plus checked-in examples and tests. Temporary screenshots used during review should stay outside the repo.
-
-Avoid:
-
-- Generic dashboard templates.
-- Large metric cards.
-- Heavy rounded containers.
-- Purple/blue SaaS gradients.
-- Dense multi-column forms that make answers cramped.
-- Hiding long answer descriptions inside single-line controls.
-
-## 18. Maintenance
-
-Keep this file current. When layout, tokens, component behavior, state handling, or core interaction changes, update `DESIGN.md` in the same pull request. Remove obsolete rules instead of leaving them as historical notes. This document describes the product as it should currently be built, not a wishlist for another product.
+- Layout, tokens, component behavior, state handling, copy flow, secret handling, or core interaction changes.
+- A new visual direction replaces the current "Paper Trail" document model.

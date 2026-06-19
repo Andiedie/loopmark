@@ -74,7 +74,7 @@ describe("bundled Loopmark skill", () => {
     expect(readme).toContain("How It Works");
     expect(readme).toContain("Privacy And Secrets");
     expect(readme).toContain("Self-Hosting On Cloudflare");
-    expect(readme).toContain("CLOUDFLARE_ACCOUNT_ID");
+    expect(readme).toContain("docs/operations/cloudflare.md");
     expect(readme).not.toContain("## Development");
     expect(readme).not.toContain("## Release");
   });
@@ -94,6 +94,14 @@ describe("bundled Loopmark skill", () => {
 
     expect(design).toContain("copy Markdown");
     expect(design).toContain("local `.env` retrieval");
+    expect(design).toContain("## Detailed Layout Constraints");
+    expect(design).toContain("Modals and drawers are not part of v1");
+    expect(design).toContain("## Component Rules");
+    expect(design).toContain("Icon-only buttons must have accessible labels");
+    expect(design).toContain("## Accessibility And Motion");
+    expect(design).toContain("Respect `prefers-reduced-motion`");
+    expect(design).toContain("## Content Style");
+    expect(design).toContain("Button copy uses clear verbs");
     expect(design).not.toContain("import-file");
     expect(design).not.toContain("imports Markdown");
   });
@@ -104,10 +112,11 @@ describe("bundled Loopmark skill", () => {
     expect(packageJson.files).toContain("skills");
   });
 
-  it("keeps custom base URL in the protocol and deployment details in the README", () => {
+  it("keeps custom base URL in the protocol and deployment details in the operations runbook", () => {
     const skill = readFixture("../skills/loopmark/SKILL.md");
     const protocol = readFixture("../skills/loopmark/references/protocol.md");
     const readme = readFixture("../README.md");
+    const cloudflare = readFixture("../docs/operations/cloudflare.md");
 
     expect(protocol).toContain("Use another Loopmark server");
     expect(protocol).toContain("Create with inline stdin");
@@ -126,12 +135,48 @@ describe("bundled Loopmark skill", () => {
     expect(protocol).toContain("LOOPMARK_BASE_URL");
     expect(skill).toContain("#self-hosting-on-cloudflare");
     expect(readme).toContain("Self-Hosting On Cloudflare");
-    expect(readme).toContain("CLOUDFLARE_ACCOUNT_ID");
-    expect(readme).toContain("CLOUDFLARE_API_TOKEN");
-    expect(readme).toContain("Workers R2 Storage read permissions");
-    expect(readme).toContain("R2 edit, zone, and DNS permissions are not needed");
-    expect(readme).toContain("not an R2 object API token");
-    expect(readme).toContain("Keep the R2 bucket private");
-    expect(readme).toContain("The workflow uses it only as the GitHub environment URL");
+    expect(readme).toContain("docs/operations/cloudflare.md");
+    expect(cloudflare).toContain("CLOUDFLARE_ACCOUNT_ID");
+    expect(cloudflare).toContain("CLOUDFLARE_API_TOKEN");
+    expect(cloudflare).toContain("Workers R2 Storage read permissions");
+    expect(cloudflare).toContain("not an R2 object API token");
+    expect(cloudflare).toContain("R2 edit, zone, and DNS permissions are not needed");
+    expect(cloudflare).toContain("Keep the R2 bucket private");
+    expect(cloudflare).toContain("does not configure Cloudflare routing");
+  });
+
+  it("keeps agent documentation discoverable from the repository entry point", () => {
+    const agents = readFixture("../AGENTS.md");
+    const context = readFixture("../CONTEXT.md");
+    const documentation = readFixture("../docs/agents/documentation.md");
+    const issueTracker = readFixture("../docs/agents/issue-tracker.md");
+    const triageLabels = readFixture("../docs/agents/triage-labels.md");
+    const domain = readFixture("../docs/agents/domain.md");
+
+    expect(agents).toContain("CONTEXT.md");
+    expect(agents).toContain("docs/agents/documentation.md");
+    expect(agents).toContain("## Agent skills");
+    expect(agents).toContain("docs/agents/issue-tracker.md");
+    expect(agents).toContain("docs/agents/triage-labels.md");
+    expect(agents).toContain("docs/agents/domain.md");
+    expect(agents).toContain("docs/operations/cloudflare.md");
+    expect(agents).toContain("pnpm exec vitest run tests/skill.test.ts --coverage=false");
+    expect(context).toContain("R2 stores encrypted session envelopes");
+    expect(context).toContain("Answer Markdown");
+    expect(context).toContain("pnpm exec vitest run tests/skill.test.ts --coverage=false");
+    expect(documentation).toContain("Treat `skills/loopmark/**` as published product protocol");
+    expect(documentation).not.toContain("## Reseed Backup");
+    expect(documentation).not.toContain("documentation-reseed-2026-06-19");
+    expect(documentation).toContain("git diff --check");
+    expect(documentation).toContain("pnpm exec vitest run tests/skill.test.ts --coverage=false");
+    expect(issueTracker).toContain("Issues and PRDs for this repo live as GitHub issues");
+    expect(issueTracker).toContain("PRs as a request surface: no.");
+    expect(triageLabels).toContain("`needs-triage`");
+    expect(triageLabels).toContain("`needs-info`");
+    expect(triageLabels).toContain("`ready-for-agent`");
+    expect(triageLabels).toContain("`ready-for-human`");
+    expect(triageLabels).toContain("`wontfix`");
+    expect(domain).toContain("Single-context repo.");
+    expect(domain).toContain("No `CONTEXT-MAP.md` is used.");
   });
 });
