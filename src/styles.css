@@ -39,6 +39,14 @@ button {
   font-family: "Avenir Next", Avenir, ui-sans-serif, system-ui, sans-serif;
 }
 
+.secret-value-obscured {
+  -webkit-text-security: disc;
+}
+
+.secret-value-hidden::selection {
+  color: transparent;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import {
   closestCenter,
   DndContext,
@@ -24,6 +24,8 @@ import {
   ChevronDown,
   ChevronRight,
   Clipboard,
+  Eye,
+  EyeOff,
   FileKey2,
   GripVertical,
   Loader2,
@@ -549,7 +551,14 @@ function FieldBlock(input: {
         {field.description ? <p className="mt-1 text-sm leading-6 text-paper-muted">{field.description}</p> : null}
         <div className="mt-3">
           {field.type === "text" ? (
-            <TextField field={field} answer={answer} onChange={onChange} invalid={Boolean(error)} describedBy={describedBy} />
+            <TextField
+              field={field}
+              answer={answer}
+              onChange={onChange}
+              invalid={Boolean(error)}
+              describedBy={describedBy}
+              resetVersion={resetVersion}
+            />
           ) : (
             <ChoiceField
               key={resetVersion}
@@ -606,9 +615,10 @@ function TextField(input: {
   answer: SubmittedAnswer | undefined;
   invalid: boolean;
   describedBy?: string;
+  resetVersion: number;
   onChange: (answer: SubmittedAnswer) => void;
 }) {
-  const { field, answer, invalid, describedBy, onChange } = input;
+  const { field, answer, invalid, describedBy, resetVersion, onChange } = input;
   const value = answer?.type === (field.secret ? "secret" : "text") ? answer.value ?? "" : "";
   const note = answer?.type === "secret" ? answer.note ?? "" : "";
   const update = (nextValue: string) => {
@@ -639,31 +649,86 @@ function TextField(input: {
     );
   }
 
-  const answerInput = field.multiline ? (
-    <Textarea
-      id={field.id}
-      value={value}
-      aria-invalid={invalid}
-      aria-describedby={describedBy}
-      rows={5}
-      onChange={(event) => update(event.target.value)}
-    />
-  ) : (
-    <Input
-      id={field.id}
-      type="password"
-      value={value}
-      aria-invalid={invalid}
-      aria-describedby={describedBy}
-      onChange={(event) => update(event.target.value)}
-    />
-  );
-
   return (
     <div className="flex flex-col gap-4">
-      {answerInput}
+      <SecretTextAnswer
+        key={resetVersion}
+        field={field}
+        value={value}
+        invalid={invalid}
+        describedBy={describedBy}
+        onChange={update}
+      />
       <TextNote field={field} value={note} onChange={updateNote} />
     </div>
+  );
+}
+
+function SecretTextAnswer(input: {
+  field: Extract<NormalizedField, { type: "text" }>;
+  value: string;
+  invalid: boolean;
+  describedBy?: string;
+  onChange: (value: string) => void;
+}) {
+  const { field, value, invalid, describedBy, onChange } = input;
+  const [visible, setVisible] = useState(false);
+  const buttonLabel = `${visible ? "Hide" : "Show"} ${field.label}`;
+  const buttonTitle = visible ? "Hide secret value" : "Show secret value";
+  const canObscureMultiline = field.multiline && !visible && supportsTextSecurity();
+  const useMultilineFallback = field.multiline && !visible && !canObscureMultiline;
+
+  return (
+    <div className="relative max-w-3xl">
+      {field.multiline ? (
+        <Textarea
+          id={field.id}
+          value={value}
+          aria-invalid={invalid}
+          aria-describedby={describedBy}
+          rows={5}
+          className={cn("pr-12", canObscureMultiline && "secret-value-obscured", useMultilineFallback && "secret-value-hidden")}
+          style={useMultilineFallback ? hiddenSecretTextStyle : undefined}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      ) : (
+        <Input
+          id={field.id}
+          type={visible ? "text" : "password"}
+          value={value}
+          aria-invalid={invalid}
+          aria-describedby={describedBy}
+          className="pr-12"
+          onChange={(event) => onChange(event.target.value)}
+        />
+      )}
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        aria-label={buttonLabel}
+        aria-pressed={visible}
+        title={buttonTitle}
+        className="absolute right-0 top-0 text-paper-muted hover:text-paper-ink"
+        onClick={() => setVisible((current) => !current)}
+      >
+        {visible ? <EyeOff aria-hidden /> : <Eye aria-hidden />}
+      </Button>
+    </div>
+  );
+}
+
+const hiddenSecretTextStyle = {
+  color: "transparent",
+  caretColor: "#1f1d1a"
+} satisfies CSSProperties;
+
+function supportsTextSecurity(): boolean {
+  const browserCss = globalThis.CSS;
+  return (
+    typeof browserCss !== "undefined" &&
+    typeof browserCss.supports === "function" &&
+    browserCss.supports("-webkit-text-security", "disc")
   );
 }
 

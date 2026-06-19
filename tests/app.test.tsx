@@ -725,7 +725,7 @@ describe("Loopmark UI", () => {
     expect(screen.queryByLabelText(/Summary/)).not.toBeInTheDocument();
   });
 
-  it("uses a password input for single-line secret answers", async () => {
+  it("lets users reveal and hide single-line secret answers without leaking copied Markdown", async () => {
     const secretSession = normalizeSession({
       title: "Secret review",
       fields: [{ id: "token", label: "Local token", type: "text", secret: true }]
@@ -739,6 +739,10 @@ describe("Loopmark UI", () => {
     expect(screen.getByText("Secret value is omitted from Markdown and later written to a local file by the agent.")).toBeInTheDocument();
 
     await user.type(input, "secret-token");
+    await user.click(screen.getByRole("button", { name: "Show Local token" }));
+    expect(input).toHaveAttribute("type", "text");
+    await user.click(screen.getByRole("button", { name: "Hide Local token" }));
+    expect(input).toHaveAttribute("type", "password");
     await user.click(screen.getByRole("button", { name: /copy answers/i }));
     await waitFor(() => expect(screen.getByText("Answers copied")).toBeInTheDocument());
 
@@ -750,6 +754,61 @@ describe("Loopmark UI", () => {
         }
       }
     });
+  });
+
+  it("hides a revealed secret answer after reset", async () => {
+    const secretSession = normalizeSession({
+      title: "Secret review",
+      fields: [{ id: "token", label: "Local token", type: "text", secret: true }]
+    });
+    await renderCloudApp(secretSession);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const user = userEvent.setup();
+
+    const input = await screen.findByLabelText("Local token");
+    await user.type(input, "temporary-token");
+    await user.click(screen.getByRole("button", { name: "Show Local token" }));
+    expect(input).toHaveAttribute("type", "text");
+
+    await user.click(screen.getByRole("button", { name: "Reset Local token" }));
+
+    const resetInput = screen.getByLabelText("Local token");
+    expect(resetInput).toHaveAttribute("type", "password");
+    await user.type(resetInput, "new-token");
+    expect(resetInput).toHaveAttribute("type", "password");
+  });
+
+  it("lets users reveal and hide multiline secret answers", async () => {
+    const secretSession = normalizeSession({
+      title: "Secret review",
+      fields: [{ id: "token", label: "Local token", type: "text", secret: true, multiline: true }]
+    });
+    await renderCloudApp(secretSession);
+    const user = userEvent.setup();
+
+    const textarea = await screen.findByLabelText("Local token");
+    const showButton = screen.getByRole("button", { name: "Show Local token" });
+    expect(showButton).toHaveAttribute("aria-pressed", "false");
+
+    await user.type(textarea, "line one\nline two");
+    await user.click(showButton);
+    const hideButton = screen.getByRole("button", { name: "Hide Local token" });
+    expect(hideButton).toHaveAttribute("aria-pressed", "true");
+    await user.click(hideButton);
+    expect(screen.getByRole("button", { name: "Show Local token" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("keeps multiline secret text visually hidden without webkit text security", async () => {
+    vi.stubGlobal("CSS", { supports: vi.fn(() => false) });
+    const secretSession = normalizeSession({
+      title: "Secret review",
+      fields: [{ id: "token", label: "Local token", type: "text", secret: true, multiline: true }]
+    });
+    await renderCloudApp(secretSession);
+
+    const textarea = await screen.findByLabelText("Local token");
+
+    expect(getComputedStyle(textarea).color).toBe("rgba(0, 0, 0, 0)");
   });
 
   it("lets optional single choices toggle back to no answer", async () => {
