@@ -2,6 +2,8 @@
 name: release-loopmark
 description: "Release Loopmark to npm and Cloudflare."
 disable-model-invocation: true
+metadata:
+  internal: true
 ---
 
 # Release Loopmark

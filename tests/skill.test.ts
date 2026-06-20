@@ -68,6 +68,13 @@ describe("bundled Loopmark skill", () => {
     expect(readme).not.toContain("--agent codex");
   });
 
+  it("marks the release skill as internal-only", () => {
+    const releaseSkill = readFixture("../.agents/skills/release-loopmark/SKILL.md");
+
+    expect(releaseSkill).toContain("name: release-loopmark");
+    expect(releaseSkill).toContain("metadata:\n  internal: true");
+  });
+
   it("keeps README focused on human users instead of development workflow", () => {
     const readme = readFixture("../README.md");
 
