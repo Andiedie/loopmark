@@ -31,6 +31,7 @@ This document preserves domain language, invariants, and source-of-truth routes 
 - Agents investigate first. Loopmark is only for decisions, preferences, approvals, private context, ranked priorities, or secrets that cannot be safely recovered elsewhere.
 - Create is one-shot: the agent sends JSON on stdin, the CLI posts an encrypted session envelope, writes a local receipt, prints JSON on stdout, and exits.
 - Agents do not poll for ordinary answers. The human copies Answer Text in the browser and pastes that Answer Text back to the agent.
+- Browser opening convenience may open a Fill URL for the Human, but it must not replace pasted Answer Text, introduce polling, inspect browser state, or make browser submission wake the Agent.
 - Non-secret answers and notes are transported in pasted Answer Text. They are not stored as cloud answer objects.
 - Secret plaintext must not appear in copied Answer Text, stdout, logs, commits, issue comments, or ordinary docs.
 - Secret values are encrypted in the browser, uploaded as `sessions/{sessionId}/secrets.json`, then downloaded with `npx --yes @andie/loopmark secrets <session-id>` and written to a local `.env` file.
@@ -47,6 +48,7 @@ This document preserves domain language, invariants, and source-of-truth routes 
 - Field: one text or choice question. Text fields may be secret. Choice fields can be single, multiple, or ranking.
 - Group: a chapter-like section for complex sessions. Ungrouped input is normalized into one group.
 - Fill URL: public browser URL generated from the base URL and session code hash.
+- Browser opening convenience: environment-specific help that opens a Fill URL for the Human while still exposing the Fill URL as a fallback. It does not change the Answer Text transport or make browser submission wake the Agent automatically.
 - Session code: URL-hash secret used by the browser to derive the session id, decrypt the session envelope, and authorize secret upload.
 - Session id: stable `s_...` id derived from the session code and used in Worker API paths and receipt filenames.
 - Receipt: local JSON file written by the CLI. It stores session metadata and the private key for decrypting omitted secrets.
@@ -65,4 +67,4 @@ This document preserves domain language, invariants, and source-of-truth routes 
 
 - The question JSON schema, Answer Text shape, secret handling, R2 object layout, CLI stdout contract, or fill URL protocol changes.
 - The product stops using pasted Answer Text as the required non-secret answer transport.
-- The bundled skill gains or loses supported question types, flags, or workflow steps.
+- The bundled skill gains or loses supported question types, flags, workflow steps, or browser opening convenience behavior.

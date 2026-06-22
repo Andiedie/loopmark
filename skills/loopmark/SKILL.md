@@ -39,8 +39,10 @@ npx --yes @andie/loopmark < /path/to/questions.json
 `--yes` belongs to `npx`; it prevents package-runner install prompts. It is not a Loopmark CLI option.
 
 4. Parse stdout from the create command. It has `status`, `fillUrl`, `receiptFile`, and `sessionId`.
-5. Send only `fillUrl` to the human. Keep `receiptFile` local; it contains the answer decryption key.
-6. Ask the human to open the URL, answer in the browser, click Copy answers, and paste the copied Answer Text back into chat. Then stop tool activity for this wait. Do not rerun create and do not poll.
+5. If running in Codex Desktop with an in-app browser control tool already available, open `fillUrl` in the in-app browser before replying. Outside Codex Desktop, send the URL normally; do not use OS browser commands, Chrome automation, or Playwright for this handoff. Do not search for tools, install plugins, retry, troubleshoot browser opening failures, inspect the page, or take screenshots; fall back to the URL. Keep `receiptFile` local; it contains the answer decryption key.
+6. Tell the human the form is open when opening succeeds, always include `fillUrl` as a fallback, and ask them to answer in the browser, click Copy answers, and paste the copied Answer Text back into chat. Browser opening is only a convenience; the Answer Text remains the durable conversation record. Then end the turn and stop tool activity for this wait. Do not rerun create, poll, read browser state, or attempt automatic continuation.
+   - Success shape: "The form is open in the Codex browser. Fallback link: `fillUrl`. Fill it out, click Copy answers, and send me the Answer Text."
+   - Fallback shape: "I could not open the form automatically. Open this link: `fillUrl`. Fill it out, click Copy answers, and send me the Answer Text."
 7. When the human pastes the Answer Text, read the non-secret answers directly from it. The Answer Text is the durable conversation record; do not replace it with a short retrieval token.
 8. If the Answer Text contains a `Secrets` section, run the listed command or use the same `sessionId` from create:
 

@@ -37,6 +37,8 @@ Create stderr may repeat the URL and receipt path for human readability. Do not 
 
 Keep the `receiptFile` path local. It contains the secret decryption key and is required for `secrets`.
 
+In Codex Desktop, if an in-app browser control tool is already available, open the `fillUrl` there immediately after create succeeds. Outside Codex Desktop, send the URL normally; do not use OS browser commands, Chrome automation, or Playwright for this handoff. Do not bind this behavior to a specific tool name. Do not search for tools or install plugins. If opening fails or the tool is unavailable, fall back to the URL without retrying or troubleshooting. Do not inspect the page or take screenshots as part of this handoff. Always include the `fillUrl` as a fallback when replying to the human. The reply should say whether the form opened or needs to be opened manually, include the fallback link, and ask the human to click Copy answers and send Answer Text. The Answer Text flow is unchanged; browser opening does not replace the human copy-and-paste handoff, and agents must end the turn rather than poll, read browser state, or attempt automatic answer collection.
+
 After the human opens the fill URL, answers in the browser, clicks Copy answers, and pastes the copied Answer Text back to chat, read non-secret answers directly from that Answer Text. Do not ask the human to paste only "done" or a short retrieval token; the Answer Text is the durable conversation record.
 
 If the Answer Text says secrets were omitted, download the encrypted secret bundle by session id:
