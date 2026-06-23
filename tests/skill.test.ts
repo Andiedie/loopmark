@@ -48,6 +48,9 @@ describe("bundled Loopmark skill", () => {
     expect(skill).toContain("Treat every field as optional");
     expect(skill).toContain("Do not include an `Other` option");
     expect(skill).toContain("Loopmark adds `Other` automatically");
+    expect(skill).toContain("browser:control-in-app-browser");
+    expect(skill).toContain("do not treat the browser as the answer transport");
+    expect(skill).toContain("Do not scrape answers from the page");
     expect(skill).not.toContain("`required`");
     expect(skill).not.toContain("\"format\"");
     expect(skill).not.toContain("\"required\": true");
@@ -61,6 +64,10 @@ describe("bundled Loopmark skill", () => {
 
     expect(readme).toContain("npx skills add andiedie/loopmark");
     expect(readme).toContain("You do not need to install Loopmark globally");
+    expect(readme).toContain("repository-installed skill");
+    expect(readme).toContain("https://github.com/Andiedie/loopmark/blob/main/skills/loopmark/SKILL.md");
+    expect(readme).toContain("https://github.com/Andiedie/loopmark/blob/main/skills/loopmark/references/protocol.md");
+    expect(readme).not.toContain("lives in `skills/loopmark/SKILL.md`");
     expect(readme).not.toContain("skills experimental_sync");
     expect(readme).not.toContain("pnpx");
     expect(readme).not.toContain("pnpm add -D @andie/loopmark");
@@ -113,10 +120,10 @@ describe("bundled Loopmark skill", () => {
     expect(design).not.toContain("imports Markdown");
   });
 
-  it("publishes the skill directory with the npm package", () => {
+  it("keeps the skill directory out of the npm package", () => {
     const packageJson = JSON.parse(readFixture("../package.json")) as { files?: string[] };
 
-    expect(packageJson.files).toContain("skills");
+    expect(packageJson.files).not.toContain("skills");
   });
 
   it("keeps custom base URL in the protocol and deployment details in the operations runbook", () => {
@@ -132,6 +139,9 @@ describe("bundled Loopmark skill", () => {
     expect(protocol).toContain("secretFile");
     expect(protocol).toContain("preview");
     expect(protocol).toContain("api_token=<redacted>");
+    expect(protocol).toContain("## Opening Fill Pages In Agent Browsers");
+    expect(protocol).toContain("browser:control-in-app-browser");
+    expect(protocol).toContain("The in-app browser is only a presentation surface");
     expect(protocol).toContain("collapsed public note control");
     expect(protocol).toContain("All fields are optional");
     expect(protocol).toContain("Loopmark always adds a system `Other` option");
@@ -175,6 +185,7 @@ describe("bundled Loopmark skill", () => {
     expect(context).toContain("R2 stores encrypted session envelopes");
     expect(context).toContain("Answer Text");
     expect(context).toContain("pnpm exec vitest run tests/skill.test.ts --coverage=false");
+    expect(readFixture("../docs/README.md")).not.toContain("published with the package");
     expect(documentation).toContain("Treat `skills/loopmark/**` as published product protocol");
     expect(documentation).not.toContain("## Reseed Backup");
     expect(documentation).not.toContain("documentation-reseed-2026-06-19");

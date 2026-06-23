@@ -37,7 +37,15 @@ Create stderr may repeat the URL and receipt path for human readability. Do not 
 
 Keep the `receiptFile` path local. It contains the secret decryption key and is required for `secrets`.
 
-After the human opens the fill URL, answers in the browser, clicks Copy answers, and pastes the copied Answer Text back to chat, read non-secret answers directly from that Answer Text. Do not ask the human to paste only "done" or a short retrieval token; the Answer Text is the durable conversation record.
+## Opening Fill Pages In Agent Browsers
+
+After create succeeds, present `fillUrl` to the human. If the agent runtime exposes an in-app browser control capability, use it to open the fill URL for the human. In Codex, this means using the `browser:control-in-app-browser` skill when it is listed or discoverable, even if the low-level browser object is not already mounted in the current tool list.
+
+The in-app browser is only a presentation surface. Do not treat browser state, screenshots, DOM reads, or page scraping as the answer transport. The human still needs to click Copy answers and paste the copied Answer Text back to chat so the conversation has the durable human-visible record.
+
+If no browser control capability is available, or ordinary setup fails, give the human the clickable `fillUrl` and wait. Do not install plugins, poll the page, rerun create, or spend time debugging unrelated browser tooling solely for Loopmark.
+
+After the human answers in the browser, clicks Copy answers, and pastes the copied Answer Text back to chat, read non-secret answers directly from that Answer Text. Do not ask the human to paste only "done" or a short retrieval token; the Answer Text is the durable conversation record.
 
 If the Answer Text says secrets were omitted, download the encrypted secret bundle by session id:
 

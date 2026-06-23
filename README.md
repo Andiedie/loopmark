@@ -81,4 +81,4 @@ For bucket lifecycle, API token scope, custom domain setup, dry-run checks, and 
 
 ## For Agent Authors
 
-The operational protocol lives in `skills/loopmark/SKILL.md` and `skills/loopmark/references/protocol.md`. Humans normally do not need to write Loopmark JSON by hand; the installed skill teaches the agent to generate the session, run the CLI, wait for pasted Answer Text, and download omitted secrets only when needed.
+The operational protocol lives in the repository-installed skill: [`skills/loopmark/SKILL.md`](https://github.com/Andiedie/loopmark/blob/main/skills/loopmark/SKILL.md) and [`skills/loopmark/references/protocol.md`](https://github.com/Andiedie/loopmark/blob/main/skills/loopmark/references/protocol.md). Humans normally do not need to write Loopmark JSON by hand; the installed skill teaches the agent to generate the session, run the CLI, wait for pasted Answer Text, and download omitted secrets only when needed.

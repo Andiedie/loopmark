@@ -7,7 +7,7 @@ description: "Use when an AI agent needs structured human input through the Loop
 
 ## Overview
 
-Loopmark is a cloud-backed human-input handoff for agents. Use it to create an encrypted public fill page, give the URL to the human, then read the pasted Answer Text directly. If secrets were omitted, download the encrypted secret bundle with the local receipt file.
+Loopmark is a cloud-backed human-input handoff for agents. Use it to create an encrypted public fill page, present the fill page to the human, then read the pasted Answer Text directly. If secrets were omitted, download the encrypted secret bundle with the local receipt file.
 
 ## Operating Principles
 
@@ -18,6 +18,7 @@ Loopmark is a cloud-backed human-input handoff for agents. Use it to create an e
 - Treat every field as optional.
 - Do not include an `Other` option in single-choice or multiple-choice fields. Loopmark adds `Other` automatically, and it is always present on the fill page for those modes.
 - Treat stdout as the only machine-readable stream. Treat stderr as human-readable operational output.
+- When the runtime exposes an in-app browser capability, open the fill page there for the human. In Codex, use the `browser:control-in-app-browser` skill when it is listed or discoverable; do not treat the browser as the answer transport.
 - Do not poll. Create once, wait for the human to paste the copied Answer Text, then run `secrets` only if the Answer Text says secrets were omitted.
 
 ## Workflow
@@ -39,17 +40,18 @@ npx --yes @andie/loopmark < /path/to/questions.json
 `--yes` belongs to `npx`; it prevents package-runner install prompts. It is not a Loopmark CLI option.
 
 4. Parse stdout from the create command. It has `status`, `fillUrl`, `receiptFile`, and `sessionId`.
-5. Send only `fillUrl` to the human. Keep `receiptFile` local; it contains the answer decryption key.
-6. Ask the human to open the URL, answer in the browser, click Copy answers, and paste the copied Answer Text back into chat. Then stop tool activity for this wait. Do not rerun create and do not poll.
-7. When the human pastes the Answer Text, read the non-secret answers directly from it. The Answer Text is the durable conversation record; do not replace it with a short retrieval token.
-8. If the Answer Text contains a `Secrets` section, run the listed command or use the same `sessionId` from create:
+5. Keep `receiptFile` local; it contains the answer decryption key. Send only `fillUrl` to the human-facing surface.
+6. If an in-app browser control skill or tool is available, open `fillUrl` in it so the human can answer without leaving the agent UI. If the browser capability is not available or normal setup fails, fall back to the clickable `fillUrl`; do not install plugins or debug unrelated browser tooling just for Loopmark.
+7. Ask the human to answer in the browser, click Copy answers, and paste the copied Answer Text back into chat. Then stop tool activity for this wait. Do not scrape answers from the page, rerun create, or poll.
+8. When the human pastes the Answer Text, read the non-secret answers directly from it. The Answer Text is the durable conversation record; do not replace it with a short retrieval token.
+9. If the Answer Text contains a `Secrets` section, run the listed command or use the same `sessionId` from create:
 
 ```bash
 npx --yes @andie/loopmark secrets s_xxx
 ```
 
-9. Parse stdout from `secrets`. If it returns `status: "secrets_downloaded"`, use `preview.text` to understand the redacted `.env` shape and read the reported `.env` file only when the task truly requires the secret values.
-10. Avoid exposing secret file contents unless the task truly requires reading them.
+10. Parse stdout from `secrets`. If it returns `status: "secrets_downloaded"`, use `preview.text` to understand the redacted `.env` shape and read the reported `.env` file only when the task truly requires the secret values.
+11. Avoid exposing secret file contents unless the task truly requires reading them.
 
 For a self-hosted Loopmark service, pass `--base-url https://your-loopmark.example` on the create command or set `LOOPMARK_BASE_URL`.
 
@@ -92,6 +94,6 @@ For a self-hosted Loopmark service, pass `--base-url https://your-loopmark.examp
 
 ## Protocol Reference
 
-Read `references/protocol.md` when constructing grouped sessions, using secrets, setting choice defaults, interpreting output shapes, specifying another Loopmark server with `--base-url` / `LOOPMARK_BASE_URL`, or debugging validation and secret download errors.
+Read `references/protocol.md` when constructing grouped sessions, using secrets, setting choice defaults, interpreting output shapes, opening the fill page in an in-app browser, specifying another Loopmark server with `--base-url` / `LOOPMARK_BASE_URL`, or debugging validation and secret download errors.
 
 Deployment is human-facing project setup, not part of the agent handoff protocol. If the human asks how to deploy Loopmark, point them to the README self-hosting docs: https://github.com/Andiedie/loopmark#self-hosting-on-cloudflare
